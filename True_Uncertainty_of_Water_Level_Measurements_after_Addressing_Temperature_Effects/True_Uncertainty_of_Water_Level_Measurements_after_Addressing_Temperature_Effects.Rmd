@@ -1,0 +1,266 @@
+---
+# Choose from this list of Journals:
+# JGR: Atmospheres, JGR: Biogeosciences, JGR: Earth Surface, 
+# JGR: Oceans, JGR: Planets, JGR: Solid Earth, JGR: Space Physics, 
+# Global Biogeochemical Cycles, Geophysical Research Letters, 
+# Paleoceanography and Paleoclimatology, Radio Science, Reviews of Geophysics, 
+# Tectonics, Space Weather, Water Resources Research, Geochemistry, Geophysics, 
+# Geosystems, Journal of Advances in Modeling Earth Systems (JAMES),
+# Earth's Future, Earth and Space Science, Geohealth
+journal: "Water Resources Research"
+# Use draft to submit a paper
+classoption: "draft,linenumbers"
+# A title should be specific, informative, and brief. Use
+# abbreviations only if they are defined in the abstract. Titles that
+# start with general keywords then specific terms are optimized in
+# searches
+title: "True Water Level Uncertainty"
+# First name or initial followed by last name
+# Authors are individuals who have significantly contributed to the
+# research and preparation of the article. Group authors are allowed, if
+# each author in the group is separately identified in an appendix.
+# Additional author notes should be indicated with
+authors:
+  - name: Joseph P. Shannon
+    affil: 1
+    thanks: Joe's Thanks
+  # - name: Fred T. Secondauthor
+  #   affil: 1
+  #   thanks: "Current address: Some other place, Germany"
+  # - name: I. Ken Groupleader
+  #   affil: "1, 2"
+affiliations:
+  - number: 1
+    name: "Michigan Technological University, College of Forest Resources and Environmental Science"
+  # - number: 2
+  #   name: "The second affiliation"
+# More than one corresponding author is allowed in this LaTeX file and for
+# publication; but only one corresponding author is allowed in our editorial system.
+corresponding_author:
+  - name: Joseph P. Shannon
+    email: jpshanno@mtu.edu
+keypoints:  
+  - "List up to three key points (at least one is required)"
+  - "Key Points summarize the main points and conclusions of the article"
+  - "Each must be 100 characters or less with no special characters or punctuation"
+abstract: "A good abstract will begin with a short description of the problem being addressed, briefly describe the new data or analyses, then briefly states the main conclusion(s) and how they are supported and uncertainties."
+plain_language_summary: "Some journals require a plain language summary. See: https://publications.agu.org/author-resource-center/text-requirements/#abstract"
+output: 
+    rticles::agu_article
+bibliography: "`r rbbt::bbt_write_bib('biblio.bib', translator = 'bibtex', overwrite = TRUE)`"
+header-includes: 
+      - \usepackage{soulutf8}  # For UTF8 chars in TrackChanges
+# AGU recommends using the trackchanges LaTeX package in the edition process
+# which is available from this link:
+# https://publications.agu.org/files/2019/02/January-14-2019-latex-templates.zip
+---
+
+```{r echo=FALSE}
+# Some recommended settings. 
+knitr::opts_chunk$set(
+  echo = FALSE,
+  fig.pos = 'h',
+  out.extra = "",   # To force the use of figure enviroment
+  fig.cap = "Please caption every figure"
+)
+```
+
+```{r keypoints_check, echo=FALSE, results='asis', eval = TRUE}
+# This chunk adds a warning if any keypoint is longer than 100 characters. 
+# To disable it, you can remove it or set eval to FALSE.
+if (any(nchar(rmarkdown::metadata$keypoints) > 100)) {
+  cat("\\textcolor{red}{\\textbf{Warning}: keypoint(s)", 
+      knitr::combine_words(which(nchar(rmarkdown::metadata$keypoints) > 100)), 
+      "longer than 100 characters.}")
+}
+```
+
+Suggested section heads
+
+# Introduction
+
+Much research in and monitoring of water levels for wells, wetland surface water,
+and stream discharge __(sewer discharge and other applications too)__ utilize 
+pressure-transducer measurements. There are known artifacts to these measurements
+when the temperature of levelloggers is not addressed [@moore-2016] or when the
+barometric logger and water logger are not deployed in similar thermal regimes
+[@cuevas-2010; @mclaughlin-2011]. @moore-2016 suggests that all loggers be 
+tested for inaccuracies over the range of temperature measurements. 
+@mclaughlin-2011 found that .... These results are similar to @cuevas-2010, who
+found a __%ERROR__ was possible when barometric and water loggers were deployed
+in different thermal settings (__DOES THIS HOLD FOR EXTERNAL BAROMETRIC DATA?__).
+
+@tamari-2010 highlighted important differences in how logger uncertainty can be
+expressed
+
+# Materials and Methods
+
+We have conducted four experiments to determine the direct impact of temperature 
+regimes on levellogger water and barometric measurements as well as temperature
+differentials. The experiments represent a fully crossed design with stable and
+variable temperatures and similar and dissimilar air and water thermal 
+regimes. Eightteen levelloggers of varying age and model, all manufactured by
+Solinst, Ltd. (Georgetown, ON, Canada), were used to recorded water levels (
+__TABLE 1__). Two levelloggers, both Solinst Levellogger Juniors, were used to 
+monitor barometric pressure. Water levels were recorded under a fixed water
+level for compenstation, and barometric pressure was compared to nearby weather
+stations.
+
+Water levelloggers were suspended from a brace across a large container. The
+levelloggers were suspended in a manner to align the zero point of each logger.
+The loggers were covered with a fix depth of water and a layer of canola oil was
+added to prevent evaporation over the length of the experiment. Water level was
+measured at the start and end of experimental period. To provide a thermally
+similar air and water environments we placed a graduated cylinder in the center
+of the water. The cylinder was partially filled with gravel and water to
+counteract bouyancy of they cylinder. During the two experiments with sychronous
+thermal regimes the two barometric loggers were suspended directly above the
+gravel surface. The entire set-up was covered loosely with aluminum foil to
+prevent direct wind effects. External barometric pressure was retreived for two
+nearby locations accessed via the Synoptic Mesonet API
+(https://developers.synopticdata.com/mesonet/v2/). For stable thermal regimes
+the experiments were conducted in a non-climate controled  basement to minimze
+temperature fluctions. Varying thermal regime experiments were conducted
+outdoors out of direct solar radiation.
+
+In order to test the compensation models developed using the nested experiments 
+the data collection was repeated under the varying, dissimilar conditions.
+
+Levelloggers were deployed and data retreived using using Solinst Levellogger 
+v. 4.4.0 software. Loggers were set to record at 1-minute intervals with 
+time synchronized to computer time at launch. The four experiments were run 
+serially without retreiving data from the loggers. A settling time of at least
+30 minutes was observed after barometric loggers or entire experimental apparatus
+were relocated.
+
+<!-- Please use ONLY \\citet and \\citep for reference citations. -->
+<!-- DO NOT use other cite commands (e.g., \\cite, \\citeyear, \\nocite, \\citealp, etc.). -->
+<!-- Example \\citet and \\citep: -->
+<!--   ...as shown by \citet{Levitus2012}, \citet{Nuncio2011} and \citet{Raphael2004} -->
+<!--   ...as shown by \citep{Levitus2012}, \citep{Nuncio2011}, \citep{Raphael2004}. -->
+<!--   ...has been shown \citep[e.g.,][]{Levitus2012, Nuncio2011, Raphael2004}. -->
+
+# Data
+
+
+# Results
+
+There was a storm that came through, could have strong pressure gradient
+One barologger found resting on gravel/in water in cylinder during variable,
+similar experiment.
+
+Or section title might be a descriptive heading about the results
+
+Enter Figures and Tables near as possible to where they are first mentioned:
+DO NOT USE \\psfrag or \\subfigure commands.
+DO NOT USE \\newcommand, \\renewcommand, or \\def, etc.
+
+```{r}
+plot(pressure)
+```
+
+Example table
+
+\begin{table}
+ \caption{Time of the Transition Between Phase 1 and Phase 2$^{a}$}
+ \centering
+ \begin{tabular}{l c}
+ \hline
+  Run  & Time (min)  \\
+ \hline
+   $l1$  & 260   \\
+   $l2$  & 300   \\
+   $l3$  & 340   \\
+   $h1$  & 270   \\
+   $h2$  & 250   \\
+   $h3$  & 380   \\
+   $r1$  & 370   \\
+   $r2$  & 390   \\
+ \hline
+ \multicolumn{2}{l}{$^{a}$Footnote text here.}
+ \end{tabular}
+ \end{table}
+
+AGU prefers the use of {sidewaystable} over {landscapetable} as it causes fewer problems.
+
+```{r, fig.env = "sidewaysfigure"}
+plot(pressure)
+```
+
+\begin{sidewaystable}
+\caption{Caption here}
+\label{tab:signif_gap_clos}
+\begin{tabular}{ccc}
+one&two&three\\
+four&five&six
+\end{tabular}
+\end{sidewaystable}
+
+If using numbered lines, please surround equations with \\begin{linenomath\*}... \\end{linenomath\*}
+
+\begin{linenomath*}
+\begin{equation}
+y|{f} \sim g(m, \sigma)
+\end{equation}
+\end{linenomath*}
+
+# Conclusions
+
+# References
+
+
+
+\appendix
+\section{Here is a sample appendix}
+
+Optional Appendix goes here
+
+Optional Glossary, Notation or Acronym section goes here:
+
+Glossary is only allowed in Reviews of Geophysics
+
+\begin{glossary}
+\term{Term}
+ Term Definition here
+\term{Term}
+ Term Definition here
+\term{Term}
+ Term Definition here
+\end{glossary}
+
+
+\begin{acronyms}
+\acro{Acronym}
+ Definition here
+\acro{EMOS}
+ Ensemble model output statistics
+\acro{ECMWF}
+ Centre for Medium-Range Weather Forecasts
+\end{acronyms}
+
+\begin{notation}
+\notation{$a+b$} Notation Definition here
+\notation{$e=mc^2$}
+Equation in German-born physicist Albert Einstein's theory of special
+relativity that showed that the increased relativistic mass ($m$) of a
+body comes from the energy of motion of the body—that is, its kinetic
+energy ($E$)—divided by the speed of light squared ($c^2$).
+\end{notation}
+
+
+\acknowledgments
+The acknowledgments must list:
+A statement that indicates to the reader where the data
+supporting the conclusions can be obtained (for example, in the
+references, tables, supporting information, and other databases).
+
+All funding sources related to this work from all authors
+
+Any real or perceived financial conflicts of interests for any author
+
+Other affiliations for any author that may be perceived as having a conflict of 
+interest with respect to the results of this paper.
+
+It is also the appropriate place to thank colleagues and other contributors.
+
+AGU does not normally allow dedications. 
