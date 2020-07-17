@@ -94,3 +94,16 @@ has done this work previously. I would also need to get some
 experimental data from a vented levellogger. Of particular importance
 would be knowing if air temperature variation affects the vented
 levellogger.
+
+# Water Temperature Impacts
+
+Water level calculated with water\_pressure - air\_pressure
+dens\_water\_pressure - dens\_air\_pressure dens\_water\_pressure -
+pred\_air\_pressure
+
+They all have linear relationships, but the last one shows the best
+alignment between var-sim and stat-sim experiments (fall on the same
+linear trends). And not accounting for density is not an option, you can
+see the curve from density impacts at higher water and air temperatures.
+Once this curve is removed the relationship between air\_pressure and
+ex\_air\_pressure requires a linear correction.

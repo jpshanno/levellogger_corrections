@@ -1,4 +1,4 @@
-serial_number,medium,clock_error_s,cable_length_cm,water_height_cm
+serial_number,location,clock_error_s,cable_length_cm,water_height_cm
 1066019,air,3,,4.6
 1065861,air,3,,4.6
 2059683,water,1,32.8,4.6

@@ -1,6 +1,6 @@
-experiment,regime,temperature_differential,start_edt,end_time_edt,water_depth
-2,variable,similar,2020/06/08 19:45,2020/06/10 12:30,32
-4,variable,dissimilar,2020/06/10 13:30,2020/06/11 21:45,
-3,stable,dissimilar,2020/06/11 22:00,2020/06/12 23:00,32
-1,stable,similar,2020/06/12 23:30,2020/06/14 10:00,
-9,variable,dissimilar,2020/06/14 11:00,2020/06/15 15:00,
+experiment,regime,temperature_differential,start_edt,end_edt
+var-sim,variable,similar,2020/06/09 00:00,2020/06/10 12:30
+var-dis,variable,dissimilar,2020/06/10 13:30,2020/06/11 21:45
+stat-dis,static,dissimilar,2020/06/12 00:45,2020/06/12 23:00
+stat-sim,static,similar,2020/06/13 01:00,2020/06/14 10:10
+test-dat,variable,dissimilar,2020/06/14 12:30,2020/06/15 15:00

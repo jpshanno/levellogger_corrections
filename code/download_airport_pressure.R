@@ -2,13 +2,13 @@ library(data.table)
 library(httr)
 
 url <- 
-  paste("https://api.synopticdata.com/v2/stations/timeseries?stid=F3311,KCMX",
+  paste("https://api.synopticdata.com/v2/stations/timeseries?stid=F3311,KCMX,AU521",
         paste0("token=", Sys.getenv("SYNOPTIC_KEY")),
-        paste0("start=", 202005290000),
-        paste0("end=", 202006012359),
+        paste0("start=", 202006080000),
+        paste0("end=", 202006152359),
         "obtimezone=UTC",
         "units=temp|C,pres|pa",
-        "vars=air_temp,pressure,sea_level_pressure",
+        "vars=air_temp,altimeter",
         sep = "&")
 
 response <- 
