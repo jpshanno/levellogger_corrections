@@ -29,6 +29,9 @@ water_dat[levellogger_measurements,
 # There are slight temperature difference errors when water is not density 
 # adjusted
 
+# ex_sea_level_pressure_cm should be adjusted to experimental elevation by
+# ex_sea_level_pressure_cm = slp(ex_abs_pressure_cm, ex_air_temperature_c, elevation = 225)
+# lm(ex_sea_level_pressure_cm ~ slp(ex_abs_pressure_cm, ex_air_temperature_c, elevation_cm/100), data = f3311)
 water_dat[, raw_logger_error_cm := dens_water_pressure_cm - (water_depth_cm + ex_sea_level_pressure_cm) + 22500/826]
 
 water_dat[, error_range_cm := error_range(pressure_error_cm, rep(0.5, nrow(.SD)))]
@@ -175,6 +178,13 @@ water_training[water_temperature_models,
 
 water_training[, 
          temp_tdiff_logger_error_cm := temp_tdiff_water_pressure_cm - (water_depth_cm + ex_sea_level_pressure_cm) + 22500/826]
+
+ggplot(water_training,
+       aes(y = temp_tdiff_logger_error_cm,
+           x = water_temperature_c)) + 
+  geom_point() + 
+  facet_wrap(~serial_number, scales = "free")
+
 
 # Need to add in sensor resolution
 # Differs for Edge and Junior
@@ -437,17 +447,22 @@ baro_training <-
                        by = "serial_number")
 
 
-baro_training[baro_delta_t_models,
-              delta_t_adjustment := slope * (delta_t_c_min) - x_intercept,
-              on = "serial_number"]
-
 baro_training[baro_delta_t_models, 
               deltat_temp_dens_air_pressure_cm := temp_dens_air_pressure_cm - slope * (delta_t_c_min - x_intercept),
               on = "serial_number"]
 
+baro_training[, delta_t_adjustment := NULL]
+
 baro_training[baro_delta_t_models,
-              deltat_temp_dens_air_pressure_cm := deltat_temp_dens_air_pressure_cm - ifelse(abs(delta_t_c_min) > 0.05, intercept, 0),
-              on = "serial_number"]
+             delta_t_adjustment := slope * (delta_t_c_min - x_intercept) - intercept,
+             on = "serial_number"]
+
+baro_training[abs(delta_t_c_min) <= 0.05, delta_t_adjustment := 0]
+
+baro_training[,cum_delta_t_adjustment := cumsum(delta_t_adjustment),
+             by = .(experiment, serial_number)]
+
+baro_training[, deltat_temp_dens_air_pressure_cm := deltat_temp_dens_air_pressure_cm - cum_delta_t_adjustment]
 
 baro_training[, 
               deltat_temp_dens_logger_error_cm := deltat_temp_dens_air_pressure_cm - ex_abs_pressure_cm - (30236 - 22500)/826]
@@ -471,9 +486,10 @@ ggplot(baro_training,
 baro_training[, `:=`(raw_offset_cm = mean(air_pressure_cm - ex_abs_pressure_cm),
                      rect_offset_cm = mean(deltat_temp_dens_air_pressure_cm - ex_abs_pressure_cm)), 
               by = .(serial_number, experiment)]
-baro_training[, `:=`(baro_level_cm = air_pressure_cm - raw_offset_cm,
+baro_training[, `:=`(raw_baro_level_cm = air_pressure_cm - raw_offset_cm,
                      rect_baro_level_cm = deltat_temp_dens_air_pressure_cm - rect_offset_cm)]
 
+## DO THESE FINAL OFFSETS MATCH THE vardis_mean OFFSETS ABOVE?
 baro_offsets <- 
   baro_training[, lapply(.SD, mean),
                 .SDcols = c("raw_offset_cm", "rect_offset_cm"),
@@ -489,9 +505,36 @@ ggplot(baro_training,
               color = "gray80",
               alpha = 0.3) +
   geom_line() +
-  geom_line(aes(y = baro_level_cm),
+  geom_line(aes(y = raw_baro_level_cm),
             linetype = "dotted",
             color = "gray40") + 
+  ggtitle("Absolute Pressure Test Data") +
+  facet_wrap(~ serial_number + experiment,
+             scales = "free",
+             nrow = 2)
+
+baro_training[, `:=`(raw_slp_pressure_cm = slp(air_pressure_cm, air_temperature_c),
+                     rect_slp_pressure_cm = slp(deltat_temp_dens_air_pressure_cm, air_temperature_c))]
+baro_training[, `:=`(raw_slp_offset_cm = mean(raw_slp_pressure_cm - ex_sea_level_pressure_cm),
+                     rect_slp_offset_cm = mean(rect_slp_pressure_cm - ex_sea_level_pressure_cm)), 
+              by = .(serial_number, experiment)]
+baro_training[, `:=`(raw_slp_pressure_cm = raw_slp_pressure_cm - raw_slp_offset_cm,
+                     rect_slp_pressure_cm = rect_slp_pressure_cm - rect_slp_offset_cm)]
+
+ggplot(baro_training,
+       aes(x = sample_time,
+           y = rect_slp_pressure_cm,
+           color = experiment,
+           fill = experiment)) +
+  geom_ribbon(aes(ymin = ex_sea_level_pressure_cm - error_range_cm / 2,
+                  ymax = ex_sea_level_pressure_cm + error_range_cm / 2),
+              color = "gray80",
+              alpha = 0.3) +
+  geom_line() +
+  geom_line(aes(y = raw_slp_pressure_cm),
+            linetype = "dotted",
+            color = "gray40") + 
+  ggtitle("Sea Level Pressure Test Data") +
   facet_wrap(~ serial_number + experiment,
              scales = "free",
              nrow = 2)
@@ -503,13 +546,31 @@ ggplot(baro_training,
 #              on = "serial_number"]
 
 baro_testing[baro_temperature_models, 
-              rect_air_pressure_cm := dens_air_pressure_cm - slope * (air_temperature_c - x_intercept),
+              t_air_pressure_cm := dens_air_pressure_cm - slope * (air_temperature_c - x_intercept),
               on = "serial_number"]
 
 baro_testing[baro_delta_t_models,
-             full_rect_air_pressure_cm := rect_air_pressure_cm - slope * (delta_t_c_min - x_intercept),
+             dt_t_air_pressure_cm := t_air_pressure_cm - slope * (delta_t_c_min - x_intercept),
               on = "serial_number"]
 
+baro_testing[, delta_t_adjustment := NULL]
+
+baro_testing[baro_delta_t_models,
+             delta_t_adjustment := slope * (delta_t_c_min - x_intercept) - intercept,
+             on = "serial_number"]
+
+baro_testing[abs(delta_t_c_min) <= 0.05, delta_t_adjustment := 0]
+
+baro_testing[, cum_delta_t_adjustment := cumsum(delta_t_adjustment),
+             by = .(serial_number, experiment)]
+
+ggplot(data =baro_testing,
+       aes(x = sample_time, 
+           y = cum_delta_t_adjustment)) + 
+  geom_line() +
+  facet_wrap(~serial_number, scales = "free")
+
+baro_testing[, cdt_dt_t_air_pressure_cm := dt_t_air_pressure_cm - cum_delta_t_adjustment]
 
 # baro_testing[baro_delta_t_models,
 #              full_rect_air_pressure_cm := rect_air_pressure_cm - ifelse(abs(delta_t_c_min) > 0.05, slope * delta_t_c_min, 0),
@@ -518,15 +579,33 @@ baro_testing[baro_delta_t_models,
 # Not using standard offsets from baro_training because it changes slightly each
 # time the loggers are hung
 baro_testing[, `:=`(raw_offset_cm = mean(air_pressure_cm - ex_abs_pressure_cm),
-                    rect_offset_cm = mean(rect_air_pressure_cm - ex_abs_pressure_cm),
-                    full_rect_offset_cm = mean(full_rect_air_pressure_cm - ex_abs_pressure_cm)), 
-             by = .(serial_number)]
+                    t_offset_cm = mean(t_air_pressure_cm - ex_abs_pressure_cm),
+                    dt_t_offset_cm = mean(dt_t_air_pressure_cm - ex_abs_pressure_cm),
+                    cdt_dt_t_offset_cm = mean(cdt_dt_t_air_pressure_cm - ex_abs_pressure_cm)), 
+             by = .(serial_number, experiment)]
 
-baro_testing[,`:=`(raw_baro_level_cm = air_pressure_cm - raw_offset_cm,
-                   rect_baro_level_cm = rect_air_pressure_cm - rect_offset_cm,
-                   full_rect_baro_level_cm = full_rect_air_pressure_cm - full_rect_offset_cm)]
+baro_testing[,`:=`(raw_baro_cm = air_pressure_cm - raw_offset_cm,
+                   t_baro_cm = t_air_pressure_cm - t_offset_cm,
+                   dt_t_baro_cm = dt_t_air_pressure_cm - dt_t_offset_cm,
+                   cdt_dt_t_baro_cm = cdt_dt_t_air_pressure_cm - cdt_dt_t_offset_cm)]
 
-baro_testing[, mean((rect_air_pressure_cm - ex_abs_pressure_cm) / ex_abs_pressure_cm), by = "serial_number"]
+baro_testing[, `:=`(sl_pressure_cm = slp(air_pressure_cm, air_temperature_c),
+                    t_sl_pressure_cm = slp(t_air_pressure_cm, air_temperature_c),
+                    dt_t_sl_pressure_cm = slp(dt_t_air_pressure_cm, air_temperature_c),
+                    cdt_dt_t_sl_pressure_cm = slp(cdt_dt_t_air_pressure_cm, air_temperature_c))]
+
+baro_testing[, `:=`(slp_offset_cm = mean(sl_pressure_cm - ex_sea_level_pressure_cm),
+                    t_slp_offset_cm = mean(t_sl_pressure_cm - ex_sea_level_pressure_cm),
+                    dt_t_slp_offset_cm = mean(dt_t_sl_pressure_cm - ex_sea_level_pressure_cm),
+                    cdt_dt_t_slp_offset_cm = mean(cdt_dt_t_sl_pressure_cm - ex_sea_level_pressure_cm)), 
+             by = .(serial_number, experiment)]
+
+baro_testing[,`:=`(raw_slp_cm = sl_pressure_cm - slp_offset_cm,
+                   t_slp_cm = t_sl_pressure_cm - t_slp_offset_cm,
+                   dt_t_slp_cm = dt_t_sl_pressure_cm - dt_t_slp_offset_cm,
+                   cdt_dt_t_slp_cm = cdt_dt_t_sl_pressure_cm - cdt_dt_t_slp_offset_cm)]
+
+# baro_testing[, mean((rect_air_pressure_cm - ex_abs_pressure_cm) / ex_abs_pressure_cm), by = "serial_number"]
 
 # Sea Level Pressure:
 # serial_number         V1
@@ -547,21 +626,6 @@ baro_testing[, mean((rect_air_pressure_cm - ex_abs_pressure_cm) / ex_abs_pressur
 # 1:       1066019 0.011926889
 # 2:       1065861 0.008829354
 
-baro_testing[, delta_t_adjustment := NULL]
-
-baro_testing[baro_delta_t_models,
-             delta_t_adjustment := slope * (delta_t_c_min - x_intercept) - intercept,
-             on = "serial_number"]
-
-baro_testing[abs(delta_t_c_min) <= 0.05, delta_t_adjustment := 0]
-
-baro_testing[,cum_delta_t_adjustment := cumsum(delta_t_adjustment),
-             by = "serial_number"]
-
-ggplot(baro_testing, aes(x = sample_time,
-                         y = cum_delta_t_adjustment)) +
-  geom_line() + 
-  facet_wrap(~serial_number, scales = "free")
 
 {ggplot(baro_testing,
        aes(x = sample_time)) +
@@ -570,11 +634,9 @@ ggplot(baro_testing, aes(x = sample_time,
               fill = "gray80") + 
   geom_line(aes(y = ex_abs_pressure_cm),
             color = "gray70") +
-  geom_line(aes(y = (full_rect_baro_level_cm + cum_delta_t_adjustment) - mean(full_rect_baro_level_cm + cum_delta_t_adjustment - ex_abs_pressure_cm)),
+  geom_line(aes(y = cdt_dt_t_baro_cm),
             linetype = "solid") +
-  geom_line(aes(y = full_rect_baro_level_cm),
-            linetype = "dashed") +
-    geom_line(aes(y = raw_baro_level_cm),
+    geom_line(aes(y = raw_baro_cm),
               linetype = "dotted") +
   facet_wrap(~serial_number) +
   guides(linetype = FALSE) +
@@ -587,30 +649,56 @@ ggplot(baro_testing, aes(x = sample_time,
               fill = "gray80") + 
   geom_line(aes(y = ex_sea_level_pressure_cm),
             color = "gray70") +
-    geom_line(aes(y = slp(full_rect_baro_level_cm - cum_delta_t_adjustment, air_temperature_c) - mean(slp(full_rect_baro_level_cm - cum_delta_t_adjustment, air_temperature_c) - ex_sea_level_pressure_cm),
-              linetype = "Temperature & Detla T & DetlaT Offset")) +
-  geom_line(aes(y = slp((full_rect_baro_level_cm) , air_temperature_c) - mean(slp((full_rect_baro_level_cm) , air_temperature_c) - ex_sea_level_pressure_cm),
-            linetype = "Temp & Delta T")) +
-    geom_line(aes(y = slp(raw_baro_level_cm, air_temperature_c) - mean(slp(raw_baro_level_cm, air_temperature_c) - ex_sea_level_pressure_cm),
+    geom_line(aes(y = cdt_dt_t_slp_cm,
+              linetype = "Corrected")) +
+    geom_line(aes(y = raw_slp_cm,
               linetype = "Raw")) +
   facet_wrap(~serial_number) +
   scale_linetype_manual(name = NULL,
-                        values = c("dotted", "dashed", "solid"),
-                        breaks = c("Raw", "Temp & Delta T", "Temperature & Detla T & DetlaT Offset")) +
+                        values = c("dotted", "solid"),
+                        breaks = c("Raw", "Corrected")) +
   scale_x_datetime(date_labels = "%H:%M") +
   theme(legend.position = "bottom")}
 
-baro_testing[, lapply(.SD, function(x){sum(!between(x, ex_abs_pressure_cm - error_range_cm / 2, ex_abs_pressure_cm + error_range_cm / 2))}),
-          by = .(serial_number),
-          .SDcols = c("raw_baro_level_cm",
-                      "rect_baro_level_cm",
-                      "full_rect_baro_level_cm")]
+baro_out_of_bounds <- 
+  rbind(
+    baro_testing[, lapply(.SD, function(x){sum(!between(x, ex_abs_pressure_cm - error_range_cm / 2, ex_abs_pressure_cm + error_range_cm / 2))}),
+                 by = .(serial_number, experiment),
+                 .SDcols = patterns("baro_cm")] %>% 
+      melt(c("serial_number", "experiment"),
+           variable.name = "correction_method",
+           value.name = "n_errors"),
+    baro_testing[, lapply(.SD, function(x){sum(!between(x, ex_sea_level_pressure_cm - error_range_cm / 2, ex_sea_level_pressure_cm + error_range_cm / 2))}),
+                 by = .(serial_number, experiment),
+                 .SDcols = patterns("slp_cm")] %>% 
+      melt(c("serial_number", "experiment"),
+           variable.name = "correction_method",
+           value.name = "n_errors")
+  )
 
-baro_testing[, lapply(.SD, function(x){mean(abs(ex_abs_pressure_cm - x))}),
-          by = .(serial_number, experiment),
-          .SDcols = c("raw_baro_level_cm",
-                      "rect_baro_level_cm",
-                      "full_rect_baro_level_cm")]
+plot(n_errors ~ correction_method,
+        data = baro_out_of_bounds)
+
+baro_mad <- 
+  rbind(
+    baro_testing[, lapply(.SD, function(x){median(abs(ex_abs_pressure_cm - x))}),
+                 by = .(serial_number, experiment),
+                 .SDcols = patterns("baro_cm")] %>% 
+      melt(c("serial_number", "experiment"),
+           variable.name = "correction_method",
+           value.name = "mad_cm"),
+    baro_testing[, lapply(.SD, function(x){median(abs(ex_sea_level_pressure_cm - x))}),
+                 by = .(serial_number, experiment),
+                 .SDcols = patterns("slp_cm")] %>% 
+      melt(c("serial_number", "experiment"),
+           variable.name = "correction_method",
+           value.name = "mad_cm"))
+
+
+boxplot(mad_cm ~ correction_method,
+        data = baro_mad)
+abline(h = 0.1)
+
 
 full_baro <- 
   f3311[raw, on = "sample_time"]
@@ -682,32 +770,33 @@ full_baro[, lapply(.SD, function(x){mean(abs(ex_abs_pressure_cm - x))}),
 
 baro <- 
   raw %>%
-  .[, `:=`(delta_t_c_min = round(c(NA_real_, diff(air_temperature_c)), 1),
+  .[, `:=`(delta_at_c_min = round(c(NA_real_, diff(air_temperature_c)), 1),
            delta_p_cm = c(NA_real_, diff(air_pressure_cm)))] %>% 
   .[, dens_air_pressure_cm := 1000 * air_pressure_cm / water_density(air_temperature_c)] %>% 
   set_experiments("data/experimental_design.csv")
 
 # baro[, dens_sea_level_pressure_cm := slp(dens_air_pressure_cm, air_temperature_c)]
 
-baro[baro_temperature_models, 
-          rect_air_pressure_cm := dens_air_pressure_cm - slope * (air_temperature_c - x_intercept),
-          on = "serial_number"]
-
-baro[baro_delta_t_models,
-          full_rect_air_pressure_cm := rect_air_pressure_cm - slope * (delta_t_c_min - x_intercept),
-          on = "serial_number"]
+# baro[baro_temperature_models, 
+#           rect_air_pressure_cm := dens_air_pressure_cm - slope * (air_temperature_c - x_intercept),
+#           on = "serial_number"]
+# 
+# baro[baro_delta_t_models,
+#           full_rect_air_pressure_cm := rect_air_pressure_cm - slope * (delta_t_c_min - x_intercept),
+#           on = "serial_number"]
 
 baro <- 
   f3311[baro, 
         .(baro_sn = serial_number, 
           sample_time, 
           air_temperature_c, 
+          delta_at_c_min,
           raw_air_pressure_cm = air_pressure_cm, 
           dens_air_pressure_cm = dens_air_pressure_cm,
-          rect_air_pressure_cm, 
+          # rect_air_pressure_cm, 
           ex_sea_level_pressure_cm,
           ex_air_temperature_c,
-          slp_air_pressure_cm = slp(rect_air_pressure_cm, air_temperature_c),
+          # slp_air_pressure_cm = slp(rect_air_pressure_cm, air_temperature_c),
           baro_error_cm = pressure_error_cm),
         on = "sample_time",
         nomatch = NA]
@@ -755,6 +844,49 @@ combined[, error_range_cm := error_range(water_error_cm, baro_error_cm)]
 combined[, temperature_difference_c := air_temperature_c - water_temperature_c]
 combined[, ex_temperature_difference_c := ex_air_temperature_c - water_temperature_c]
 
+# Compensate Baro
+
+combined[baro_temperature_models,
+         rect_air_pressure_cm := dens_air_pressure_cm - slope * (air_temperature_c - x_intercept),
+         on = c(baro_sn = "serial_number")]
+
+combined[baro_delta_t_models,
+         rect_air_pressure_cm := rect_air_pressure_cm - slope * (delta_at_c_min - x_intercept),
+         on = c(baro_sn = "serial_number")]
+
+combined[, delta_t_adjustment := NULL]
+
+combined[baro_delta_t_models,
+             delta_t_adjustment := slope * (delta_at_c_min - x_intercept) - intercept,
+             on = c(baro_sn = "serial_number")]
+
+combined[abs(delta_at_c_min) <= 0.05, delta_t_adjustment := 0]
+
+combined[, cum_delta_t_adjustment := cumsum(delta_t_adjustment),
+             by = .(baro_sn, water_sn, experiment)]
+
+combined[, rect_air_pressure_cm := rect_air_pressure_cm - cum_delta_t_adjustment]
+
+combined[, rect_slp_cm := slp(rect_air_pressure_cm, air_temperature_c)]
+
+ggplot(data = combined[experiment == "test-dat"],
+       aes(x = sample_time, 
+           y = cum_delta_t_adjustment)) + 
+  geom_line(stat = "summary",
+            fun = "mean") +
+  facet_wrap(~baro_sn, scales = "free")
+
+ggplot(combined[experiment == "test-dat"],
+       aes(x = sample_time)) +
+  geom_ribbon(aes(ymin = 0 - error_range_cm / 2,
+                  ymax = 0 + error_range_cm / 2),
+              fill = "gray80") + 
+  geom_line(aes(y = 0),
+            color = "gray70") +
+  geom_line(aes(y = rect_slp_cm - mean(rect_slp_cm - ex_sea_level_pressure_cm) - ex_sea_level_pressure_cm)) +
+  facet_wrap(~baro_sn)
+
+# Compensate Water
 combined[water_tdiff_models, 
          `:=`(rect_water_pressure_cm = dens_water_pressure_cm - slope * (temperature_difference_c - x_intercept),
               ex_rect_water_pressure_cm = dens_water_pressure_cm - slope * (ex_temperature_difference_c - x_intercept)),
@@ -765,7 +897,7 @@ combined[water_temperature_models,
               ex_rect_water_pressure_cm = ex_rect_water_pressure_cm - slope * (water_temperature_c - x_intercept)),
          on = c(water_sn = "serial_number")]
 
-combined[water_deltat_models, 
+combined[water_deltat_models,
          `:=`(rect_water_pressure_cm = rect_water_pressure_cm - slope * (delta_wt_t_c_min - x_intercept),
               ex_rect_water_pressure_cm = ex_rect_water_pressure_cm - slope * (delta_wt_t_c_min - x_intercept)),
          on = c(water_sn = "serial_number")]
@@ -784,7 +916,17 @@ combined[water_deltat_models,
 #                 raw_wl_raw_air_cm = raw_wl_raw_air_cm - raw_wl_raw_offset_cm)]
 
 combined[, `:=`(raw_water_level_cm = raw_water_pressure_cm - raw_air_pressure_cm,
-                rect_water_level_cm = rect_water_pressure_cm - slp_air_pressure_cm,
+                # The rectified water level does not know how to deal with the
+                # noisy air temperatures. It is applying the regular
+                # compensation to the noisy temperature difference, resulting in
+                # large errors. So when rect_water_leve_cm =
+                # rect_water_pressure_cm - rect_slp_cm its no good. But
+                # rect_wateR_level_cm = raw_water_pressure - rect_slp_cm works
+                # pretty well. Need to do something similar to the
+                # cumsum(delta_at) adjustment (just subtracing cum_delta_t_adjustment)
+                # from the rectified water level helps. Need to find some one to
+                # combined the water_tdiff and the baro_deltat models
+                rect_water_level_cm = rect_water_pressure_cm - cum_delta_t_adjustment - rect_slp_cm,
                 ex_raw_water_level_cm = raw_water_pressure_cm - ex_sea_level_pressure_cm,
                 ex_rect_water_level_cm = ex_rect_water_pressure_cm - ex_sea_level_pressure_cm)]
 combined[, `:=`(raw_offset_cm = mean(raw_water_level_cm - water_depth_cm),
@@ -812,7 +954,6 @@ ggplot(combined[experiment == "test-dat"],
             linetype = "dotted") +
   facet_wrap(~water_sn)
 
-
 outside_bounds <- 
   combined[, lapply(.SD, function(x){sum(!between(x, water_depth_cm - error_range_cm / 2, water_depth_cm + error_range_cm / 2))}),
            by = .(water_sn, baro_sn, experiment),
@@ -821,8 +962,13 @@ outside_bounds <-
        variable.name = "correction_method",
        value.name = "n_errors")
 
-boxplot(n_errors ~ correction_method,
-        data = outside_bounds[experiment == "test-dat"])
+ggplot(outside_bounds,
+       aes(x = correction_method,
+           y = n_errors)) + 
+  geom_boxplot() + 
+  facet_wrap(~experiment, 
+             scales = "free",
+             ncol = 1)
 
 median_errors <- 
   combined[, lapply(.SD, function(x){median(abs(water_depth_cm - x))}),
@@ -832,8 +978,13 @@ median_errors <-
        variable.name = "correction_method",
        value.name = "mad_cm")
 
-boxplot(mad_cm ~ correction_method,
-        data = median_errors[experiment == "test-dat"])
+ggplot(median_errors,
+       aes(x = correction_method,
+           y = mad_cm)) + 
+  geom_boxplot() + 
+  facet_wrap(~experiment, 
+             scales = "free",
+             ncol = 1)
 abline(h = 0.1)
 
 # Water With Solinst Baro -------------------------------------------------
