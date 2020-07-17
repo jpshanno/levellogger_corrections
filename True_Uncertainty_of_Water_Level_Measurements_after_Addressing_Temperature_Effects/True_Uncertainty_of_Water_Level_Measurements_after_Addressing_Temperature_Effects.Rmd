@@ -155,17 +155,19 @@ compare it to instrument error.
 
 We have conducted four experiments to determine the direct impact of temperature
 regimes on levellogger water and barometric measurements as well as temperature
-differentials. The experiments represent a fully crossed design with stable and
-variable temperatures and similar and dissimilar air and water thermal regimes.
-Eightteen levelloggers of varying age and model, all manufactured by Solinst,
-Ltd. (Georgetown, ON, Canada), were used to recorded water levels ( __TABLE
-1__). Two levelloggers, both Solinst Levellogger Juniors, were used to monitor
-barometric pressure. All levelloggers attempt to provide internal temperature
-compenstation on temperature measurments. Reference barometric pressure was
-obtained from the Automatic Position Reporting System WX NET/Citizen Weather
-Observer Program station FW3311. Station FW3311 is located 3 km away and 77m
-higher than the study location. Data for the study period were retreived using
-the Synoptic Mesonet API (https://developers.synopticdata.com/mesonet/v2/).
+differentials. In this context a levellogger consists of a absolute pressure
+transducer, temperature sensor, and on-board data storage. The experiments
+represent a fully crossed design with stable and variable temperatures and
+similar and dissimilar air and water thermal regimes. Eightteen levelloggers of
+varying age and model, all manufactured by Solinst, Ltd. (Georgetown, ON,
+Canada), were used to recorded water levels ( __TABLE 1__). Two levelloggers,
+both Solinst Levellogger Juniors, were used to monitor barometric pressure. All
+levelloggers attempt to provide internal temperature compenstation on
+temperature measurments. Reference barometric pressure was obtained from the
+Automatic Position Reporting System WX NET/Citizen Weather Observer Program
+station FW3311. Station FW3311 is located 3 km away and 77m higher than the
+study location. Data for the study period were retreived using the Synoptic
+Mesonet API (https://developers.synopticdata.com/mesonet/v2/).
 
 Water levelloggers were suspended from a brace across a large container. The
 levelloggers were suspended in a manner to align the zero point of each logger.
@@ -196,6 +198,17 @@ manner to remove periods of extreme rates of temperature change when water or
 barometric loggers were repositioned as this introduces known additional errors
 [@liu-2015].
 
+## Data Processing and Analysis
+
+All data processing and analysis was performed in R [@rcoreteam-2019] using the
+pacakges `data.table` [@dowle-2019] for data manipulation, `ggplot2`
+[@wickham-2016] and `patchwork` [@pedersen-2019a] for visualization, `mcp`
+[@lindelov-2020] for change point analysis, and `httr` [@wickham-2019a] for
+Mesonet API access and caching. The `drake` [@landau-2018], `rmarkdown`
+[@allaire-2020; @xie-2018], `rticles` [@allaire-2019], and `rbbt`
+[@dunnington-2020] packages were used to generate a reproducible project and
+publication.
+
 ## Temperature Correction for Individual Sensors
 
 All of the sensors used in this study are designed to measure prsesure at a
@@ -205,10 +218,14 @@ account for the larger range of temperatures observed in this study the recorded
 pressure was adjusted to account for the variable density of water.
 $$h_{r} = h\;\mathsf{x}\;\frac{1000}{\rho_T}$$ 
 where $\rho_T$ is the density of water as a function of temperature taken from
-[@tanaka-2001, Eq. 1].
+[@tanaka-2001, Eq. 1]. For all models specified below correction of pressure 
+errors were not applied when a model slope was not signficant at the $\alpha$=0.05
+level.
+
+### Barometric Pressure
 
 For barometric loggers, we fit an ordinary least squares regression between the
-barometric error ($P_{A} - P_{F3311}$) and air temperature. While the loggers
+barometric error ($\epsilon_a = P_{a} - P_{F3311}$) and air temperature. While the loggers
 were moved during the study their position relative to F3311 and each other
 shifted slightly. To align the data across experiments, data from each
 experiment and logger were shifted by the difference of mean pressure of that
@@ -223,14 +240,87 @@ values. Error values were aligned within loggers by the difference in mean
 pressure between an experiment and *var-dis* pressure within the same range of
 air temperature.
 
-As anticipated we observed a trend between temperature-corrected barometric 
-error and rate of temperature change ($^oC\;min^{-1}$). A second OLS regression
-was fit to all observations where $abs(^oC\;min^{-1}) > 0.05$, where 0.05 is 
+Temperature compensation models were applied to recorded $P_a$ using equation 3
+in Moore [-@moore-2016]. Temperature-compensated air pressure was then used to
+calculate an updated $\epsilon_a$. We observed a trend between the updated 
+$\epsilon_a$ and rate of temperature change ($^oC\;min^{-1}$). A second OLS regression
+was fit to all observations where $abs(^oC\;min^{-1}) > 0.05$, where 0.05 is
 half of the temperature resolution of these loggers ($0.1 ^oC$). These rapid
-shifts also result in an offset in recorded pressure. This shift can be removed
-by applying the cumulative impact of the $\Delta T$ model. These two 
-corrections were then applied to the withheld test set (*test-dat*) of data to
-evaluate the accuracy of the correction.
+shifts also result in an offset in recorded pressure, likely the result of a
+delay in the internal components equilibrating to the new temperature
+[@freeman-2004]. This shift can be removed by applying the cumulative impact of
+the $\Delta T$ model. 
+
+Following compensation for $\Delta T$ updated $\epsilon_a$ was visually compared
+to $T_a$, $\Delta T_a$, and the temperature difference between the levellogger
+and F3311 air temperatures. With no trends remaining the authors feel confident
+that systemic artificats have been addressed.
+
+### Water Pressure
+
+Water pressure error $\epsilon_w$ was calculated as the difference between recorded pressure
+and the sum of the known water depth and sea level pressure at F3311. Sea level 
+pressure calculations adjust absolute pressure to address the varying
+lapse rates of atmospheric density due to temperature and elevation **CITATION**.
+Accounting for these lapse rates provides a more accurate measure of the actual
+atmospheric pressure at the water surface. Error rates were correlated with the
+water temperature ($T_w$) and temperature difference ($\Delta T_{a,w}$) 
+between the water and air ($T_a$). Examining the data show that 
+$\Delta T_{a,w}$ was the controling factor, creating hystersis loops and 
+non-linearity in the relationship with $T_w$ (Figure 3). 
+
+Figure 3: Water pressure error as a function of (A) temperature difference 
+($T_{air} - T_{water}$) and (B) water temperature.
+
+We fit an OLS linear regression between $\epsilon_w$ and $\Delta T_{a,w}$ for
+each water levellogger. Prior to fitting, the regression data between
+experiments were aligned as for barometric loggers (above) using *stat-sim* as
+the reference. Data from *stat-sim* were used because stable water temperatures
+result in perceived trends that are only tje result of $\Delta T_{a,w}$. Using the
+temperature-differential models water pressure was compensated and $\epsilon_w$
+was updated. Almost all loggers now showed a clear linear relationship between
+$\epsilon_w$ and $T_w$. For these loggers an OLS was fit, but for two loggers
+2030899 and 2064734, there was a breakpoint in the relationship between 
+$\epsilon_w$ and $T_w$ (Figure 4). For these loggers changepoint analysis was 
+performed to identify the breakpoint using a fixed intercept and variance and 
+varying slopes (Figure 5).
+
+Figure 4: Water pressure error as a function of water temperature after 
+compensation for difference between water and air temperature. Note loggers 
+2030899 and 2064734 have clear breaks in the relationship.
+
+
+Figure 5: Changepoint models for loggers 2030899 and 2064734
+
+Water temperature compensation was applied to the differential-compensated
+water pressure and $\epsilon_w$ was updated. Based on logger model the threshold
+for $\Delta T_w$ models varied between 0.00015 and 0.05 $^oC\;min^{-1}$ dependent 
+on the resolution of the temperature sensor. Unlike the barometric loggers the
+$\Delta T_w$ water models did not present a persistent mean offset and the 
+additional step of adding the cumulative impact was not deemed necessary.
+
+
+## Compensation Evaluation
+
+### Individual Loggers
+
+To ensure independent evaluation of compensation errors the effectiveness of
+compensation was performed using the withheld test set (*test-dat*) of data. The
+testing data were collected under variable, dissimilar temperature regimes to
+ensure that all potential compensations were employed After all necessary
+compensation steps were completed we centered the rectified pressure readings by
+subtracting the mean residual error within each logger and experiment.
+Levellogger compensations were evaluated based on two critera: number of
+recorded points which fell outside of the range of combined instrument errors
+($n_\epsilon$) and the median absolute deviation from the true values as a
+percentage of the true value. Differences were tested using ANOVA? LMER? with a
+post-hoc Tukey HSD analysis to compare between correction methods.
+
+The two evaluation metrics were calcualted for each logger and for each
+experimental period for the raw recorded pressure and the rectified pressure.
+Intermediate steps in the compensation were evaluated in the same manner to
+quantify the relative error introduced from each source of error.
+
 
 delta_t models should be an offset model because the rest of the residuals are
 centered on 0, but the delta_t values are not. So it should offset and it should
@@ -245,52 +335,18 @@ pressure. So we need to increase the pressure to match the artifical increase in
 pressure. I should be able to make a figure that shows this to have when 
 explaining this or responding to reviewers.
 
-Unlike air pressure, water temperature showed a correlation between error and
-temperature difference.
-
-Water pressure errors were aligned to *stat-sim* because *stat-sim* had the most
-stable water temperatures, so trends were induced by temperature difference.
-
-Water temperatures showed no changes in temperature that exceeded one half of 
-the resolution of the loggers.
+### Combined Compensation
 
 
-Temperature compensation (below)
-was performed using the error of recorded vs reference barometric pressure and
-for
-
-Density-compensated pressures were then compared to the , 
-altimeter, and sea level pressures. An approximately linear relationship was 
-observed between density-compensated pressure and altimeter pressure, with 
-deviations seemingly related to air temperature differences due to to the difference in
-location as well as siting and radiation shielding temperature differences were
-observed between the recorded and Mesowest readings. Data from the *var-dis*
-experiment was used The relationship was 
-strongest in the *var-dis* experiments, which had the smallest
-temperature differences. Developing an logger temperature correction required 
-three steps. An ordinarly least squares regression was fit for each logger using 
-all available training data. The standardized residuals of the models and 
-temperature differences were pooled into a single changepoint regression to 
-identify the magnitude of temperature difference before the relationship was 
-affected. Data points where the temperature difference was greater than the 
-identified threshold were removed and a final OLS model was fit to each logger.
+### Compensation of Field Data
 
 
-### Temperature Correction for Water Sensors
+## Uncertainty Analysis
 
-Although care was taking to provide similar thermal regimes in two of the 
-experiments, there were still temperature differences between the water and air
-levelloggers. In order to maximize the available data all training data were 
-used to develop unrestricted correction models. Change point regression was 
-applied on a model comparing the residuals to the temperature difference 
-between the water and air sensors. 
-Pooled models (both barometric models) showed divergent standardized residuals 
-with increasing water-air temperature difference magnitude. This required fitting
-two models for each water level logger to determine the temperature difference
-threshold. After high-magnitude temperature difference data points were removed
-it was possible to use a pooled mixed model to generate a correction.
+### Sources of Uncertainty
+Accuracy of 
 
-### Temperature Differential Correction
+
 
 ## Statistical Analysis
 
@@ -368,14 +424,12 @@ models. You can then discard the data where temperature difference is above the
 threshold and expect your final predictions to have higher errors where
 temperature difference is greater.
 
-Should temperature difference be absolute temperature difference or does the 
-sign of the difference matter. Perhaps more test data would be enough to show 
-the impact.
 
 Highlight areas where different artifacts are present. Then it can be a guide for
 where people should at their data to find artifacts.
 
-Separate out sensor-specific corrections vs generic corrections
+Separate out sensor-specific corrections vs generic corrections. Do any appear
+to be
 
 **Why Perform these Corrections?**
 One could argue that it’s not worth the additional uncertainty for a reduction
@@ -392,28 +446,50 @@ that an understanding of the true uncertainty of  measured data will allow more
 critical and accurate interpretation. How strong are the diurnal signals in
 relation to known uncertainty.
 
-We have shown that even with the added uncertainty of rectified barometric
+
+
+Temperature compensation could be overstated based on the time scale of the
+study. Would have to know how quickly Solinst changes temperatures in their
+calibrations. [@freeman-2004] talks about this stating that it could be a rate
+of change issue and/or the fact that parts of the electronics may change
+temperatures at different times. Relatedly, it is important to note that these
+rapid temperature changes were short-lived and the offset of the $\Delta T$
+models may decline over time much as an intervention effect in a time series
+model. We tested this on inter-experiment data excluded from this analysis and
+found that ... (move from outside to inside for stat-dis and the long gradual
+decrease in temperature after a short rapid change)
+
+The authors have chosen to focus on trend correction rather than offset. In 
+general systematic offsets are corrected through manual calibration measurements
+during deployment. If deployed conditions will not allow for manual calibration
+measurements, the above approaches are applicable, but offsets must be carefully
+calculated. This will involve know the exact elevation difference between 
+the instrument supplying reference pressure measurments and prsesure transducers
+during calibration.
+
+I cannot compare if the water level errrors are of fixed magnitude or percentage
+based. I could make some educated guess from the barometric loggers though.
+
+## Recommendations
+
+- We have shown that even with the added uncertainty of rectified barometric
 pressure we can provide water level compensations that match those from an
 external, reference source. However it is important that during data processing
 other stations were found to have different slopes for temperature correction 
 models. For use in future work it is recommended that the relationship be 
 developed individually for any external stations that may be used to back-fill
-missing experimental or monitoring data.
+missing experimental or monitoring data. Or inversely that back-fill sources
+are corrected to match your pressure transducers.
 
-Temperature compensation could be overstated based on the time scale of the study.
-Would have to know how quickly Solinst changes temperatures in their calibrations.
-[@freeman-2004] talks about this stating that it could be a rate of change issue
-and/or the fact that parts of the electronics may change temperatures at 
-different times.
+- For each new logger check for *all* potential error-inducing sources. Each 
+logger should be checked for temperature gradients, temperature difference
+gradients to reference values, and rate of change of temperature or pressure
 
-It is important to note that these rapid temperature changes were short-lived
-and the offset of the $\Delta T$ models may decline over time much as an 
-intervention effect in a time series model. We tested this on inter-experiment
-data excluded from this analysis and found that ... (move from outside to inside
-for stat-dis and the long gradual decrease in temperature after a short rapid 
-change)
-
-
+- In this study no mean offset was necessary to account for persistent pressure
+errors due to rapid water temperature changes. This is likely because of the
+buffered $\Delta T_w$ relative to $\Delta T_a$. In setting where rapid changes
+in water temperature are possible calibration should consider including a
+persistent impact.
 # References
 
 
