@@ -523,12 +523,12 @@ set_experiments <-
   }
 
 slp <- 
-  function(p_cm, temp_c){
+  function(p_cm, temp_c, elevation = 225){
     p_hPa <- 
       0.01 * p_cm * 9.80665 * 1000
     
     slp_hPa <- 
-      p_hPa * (1 - (0.0065 * 225) / (temp_c + 273.15 + 0.0065 * 225))^-5.257
+      p_hPa * (1 - (0.0065 * elevation) / (temp_c + 273.15 + 0.0065 * elevation))^-5.257
     
     100 * slp_hPa / (9.80665 * 1000)
   }
