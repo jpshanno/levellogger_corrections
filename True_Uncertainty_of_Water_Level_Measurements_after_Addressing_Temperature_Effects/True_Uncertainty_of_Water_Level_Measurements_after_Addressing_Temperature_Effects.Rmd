@@ -75,7 +75,7 @@ if (any(nchar(rmarkdown::metadata$keypoints) > 100)) {
 }
 ```
 
-Suggested section heads
+**NEED TO CHANGE TERMINOLOGY FROM LEVELLOGGER TO ...**
 
 # Introduction
 
@@ -94,7 +94,7 @@ barometric and water pressure instruments [@cuevas-2010; @mclaughlin-2011].
 of temperature measurements and individual calibrations be developed to apply 
 to collected data. 
 
-@mclaughlin-2011 found that temperature differentials between levellogger
+Mclaughlin [-@mclaughlin-2011] found that temperature differentials between levellogger
 measurements introduced detectable artifacts with __%ERROR__. These results are
 similar to @cuevas-2010, who found a __%ERROR__ was possible when barometric and
 water loggers were deployed in different thermal settings. Both Mclaughlin
@@ -125,33 +125,34 @@ loops (Figure 1).
 Figure 1: Water level error as function of water temperature recorded by the logger. The line color indicates the temperature difference between the water and air.
 
 Evapotranspiration has been estimated by the diurnal signal in well water levels
-and streamflow. Correcting for temperature-induced errors is essential to ensure
-that the observed flucuations are real and not an artifact. @Cuevas-2010 and
-@gribovszki-2013 do validate their measurements with manual readings over the
-course of at least one 24-hour period. However, there are no studies to date
-examining the combined impact of instrument error and correction error to
-estimate the full uncertaintly of measurements. @tamari-2010 highlighted
-important differences in how logger uncertainty can be expressed, and how just
-instrument error may be enough to mask the targetted signal. Therefore
-instrument error, and any uncertainty in correcting the intra- and interlogger
-artifacts, should be propagated through to the final water level record.
-Propagated uncertainty will provide a detection limit for true diurnal signals.
-Without additional validation (through manual measurements or other
+and streamflow **CITATIONS**. Correcting for temperature-induced errors is
+essential to ensure that the observed flucuations are real and not an artifact.
+@Cuevas-2010 and @gribovszki-2013 do validate their measurements with manual
+readings over the course of at least one 24-hour period. However, there are no
+studies to date examining the combined impact of instrument error and correction
+error to estimate the full uncertaintly of measurements. @tamari-2010
+highlighted important differences in how logger uncertainty can be expressed,
+and how just instrument error may be enough to mask the targetted signal.
+Therefore instrument error, and any uncertainty in correcting the intra- and
+interlogger artifacts, should be propagated through to the final water level
+record. Propagated uncertainty will provide a detection limit for true diurnal
+signals. Without additional validation (through manual measurements or other
 instrumentation), diurnal patterns below this detection limit must be considered
-artifacts. As such we suggest that estimates of diurnal signal should be a
-left-censored dataset.
+artifacts. As such we suggest that estimates of diurnal signal should be
+analyzed as a left-censored dataset.
 
 In this note we present a lab experiment to isolate and model the separate
 impacts of intra- and inter-logger temperature response. We demonstrate how 
 these effects may mask one another resulting in water level errors within the
 range of instrument error. We present the corrected and uncorrected water
 levels on a test set of laboratory data at as well representative data from an
-ongoing hydrologic study. Finally we demonstrate the true uncertainty and
-compare it to instrument error.
+ongoing hydrologic study. Finally we demonstrate the true uncertainty, compare 
+this to instrument error, and evaluate both against published diurnal water
+level fluctuations.
 
 # Materials and Methods
 
-## Data Collection
+## Data Collection & Preparation
 
 We have conducted four experiments to determine the direct impact of temperature
 regimes on levellogger water and barometric measurements as well as temperature
@@ -198,8 +199,6 @@ manner to remove periods of extreme rates of temperature change when water or
 barometric loggers were repositioned as this introduces known additional errors
 [@liu-2015].
 
-## Data Processing and Analysis
-
 All data processing and analysis was performed in R [@rcoreteam-2019] using the
 pacakges `data.table` [@dowle-2019] for data manipulation, `ggplot2`
 [@wickham-2016] and `patchwork` [@pedersen-2019a] for visualization, `mcp`
@@ -209,7 +208,7 @@ Mesonet API access and caching. The `drake` [@landau-2018], `rmarkdown`
 [@dunnington-2020] packages were used to generate a reproducible project and
 publication.
 
-## Temperature Correction for Individual Sensors
+## Pressure Transducer Compensation
 
 All of the sensors used in this study are designed to measure prsesure at a
 relatively constant temperature and utilize a fixed water density of 1000 $kg
@@ -299,10 +298,20 @@ on the resolution of the temperature sensor. Unlike the barometric loggers the
 $\Delta T_w$ water models did not present a persistent mean offset and the 
 additional step of adding the cumulative impact was not deemed necessary.
 
+<!-- delta_t models should be an offset model because the rest of the residuals are -->
+<!-- centered on 0, but the delta_t values are not. So it should offset and it should -->
+<!-- center. And if this holds may have to offset earlier to correct for experimental -->
+<!-- shifts. Need to look at doing the offset earlier. Also it looks like for -->
+<!-- absolute pressure you subtract the extra pressure (- cumualitive effect), but -->
+<!-- for SLP the sign is reversed. Need to make sure I explain that properly. I think -->
+<!-- it has to do with the fact that the SLP correction relates temperature to total -->
+<!-- atmospheric pressure. Need to think on this -> Artifical increases in -->
+<!-- temperature will represent as a lower SLP (higher lapse rate?) for a given  -->
+<!-- pressure. So we need to increase the pressure to match the artifical increase in -->
+<!-- pressure. I should be able to make a figure that shows this to have when  -->
+<!-- explaining this or responding to reviewers. -->
 
 ## Compensation Evaluation
-
-### Individual Loggers
 
 To ensure independent evaluation of compensation errors the effectiveness of
 compensation was performed using the withheld test set (*test-dat*) of data. The
@@ -312,43 +321,49 @@ compensation steps were completed we centered the rectified pressure readings by
 subtracting the mean residual error within each logger and experiment.
 Levellogger compensations were evaluated based on two critera: number of
 recorded points which fell outside of the range of combined instrument errors
-($n_\epsilon$) and the median absolute deviation from the true values as a
+($n_\epsilon$) and the median absolute deviation (MAD) from the true values as a
 percentage of the true value. Differences were tested using ANOVA? LMER? with a
 post-hoc Tukey HSD analysis to compare between correction methods.
 
-The two evaluation metrics were calcualted for each logger and for each
-experimental period for the raw recorded pressure and the rectified pressure.
-Intermediate steps in the compensation were evaluated in the same manner to
-quantify the relative error introduced from each source of error.
+The purpose of developing barometric and water levellogger compensations is to 
+correct field-collected data where no reference pressure is available. 
+To evaluate the combined performance of the compensation steps, 
+fully-compensated barometric and water pressures from the *test-dat* dataset 
+were used to calculate water level. The evaluation metrics of $n_\epsilon$ and 
+MAD were calculated and compared against naive water level calculation and water 
+level calculated from rectified water pressure and external barometric pressure. 
 
-
-delta_t models should be an offset model because the rest of the residuals are
-centered on 0, but the delta_t values are not. So it should offset and it should
-center. And if this holds may have to offset earlier to correct for experimental
-shifts. Need to look at doing the offset earlier. Also it looks like for
-absolute pressure you subtract the extra pressure (- cumualitive effect), but
-for SLP the sign is reversed. Need to make sure I explain that properly. I think
-it has to do with the fact that the SLP correction relates temperature to total
-atmospheric pressure. Need to think on this -> Artifical increases in
-temperature will represent as a lower SLP (higher lapse rate?) for a given 
-pressure. So we need to increase the pressure to match the artifical increase in
-pressure. I should be able to make a figure that shows this to have when 
-explaining this or responding to reviewers.
-
-### Combined Compensation
-
-
-### Compensation of Field Data
+For further validation, representative data from ongoing field research using 
+these levelloggers is evaluted using raw and compensated water and air pressure.
+These data are from a site in the western Upper Peninsula of Michigan in sites
+located in black ash wetlands. Details on the hydrology of these sites can be
+found in Van Grinsven _et al_ [-@vangrinsven-2017]. The data used in this analysis
+are from well water levels collected from a 1.25" driven monitoring well driven 
+and a 6" parshall flume on an intermittent stream which serves as the outflow of
+this headwater wetland. Well level, flume level, and barometric data were 
+collected with levelloggers ######, ######, and ###### respectively. To stay 
+within the scope of this article just one week of data were choosen for each
+water source. As these periods only include one manual measurement each, 
+calculating error metrics were not calculated. Rather the quality of the 
+resulting time series is evaluated qualitatively with an emphasis on timing of
+water level peaks and drawdown.
 
 
 ## Uncertainty Analysis
 
-### Sources of Uncertainty
-Accuracy of 
-
-
-
-## Statistical Analysis
+The two evaluation metrics above were calculated for each logger and for each
+experimental period for the raw recorded pressure and the rectified pressure.
+Intermediate steps in the compensation were evaluated in the same manner to
+quantify the relative error introduced from each source of error. We also
+present a full accounting of the uncertainty of water levels derived from
+compensated readings. A Bayesian model encompassing all of the water and
+barometric compensation steps was constructed to calculate water level for the
+test data set. For this model each observation is considered to come from a
+normally distributed dataset centered on the recorded value with a standard
+devation derived from the stated accuracy of the instruments. Within the model
+the results of each compensation are fed into the subsequent step, propagating
+the uncertainty from instrument error to final compensated pressure. This 
+analysis was performed in Stan.
 
 # Data
 
