@@ -3,6 +3,21 @@ as.numeric(st_distance(st_sfc(st_point(c(-88.58083, 47.092)), st_point(c(-88.574
 source("code/levellogger_packages.R"); source("code/levellogger_functions.R")
 loadd(raw_water_data, levellogger_measurements, mesonet_response, raw_barometric_data)
 
+theme_set(ggthemes::theme_few())
+brown_green_scale <- # Inspired by NOAA maps
+  c('#97601c', '#a47138', '#b08353', '#bc956e', '#c6a78a', '#d0baa6', '#d8cdc3', '#e0e0e0', '#c6d1cf', '#adc2bf', '#93b3af', '#7aa49f', '#5f9690', '#438781', '#207972')
+
+blue_orange_scale <-
+  c('#3085c7', '#4a98d4', '#6babde', '#90bee3', '#b7cfe3', '#e0e0e0', '#eac79d', '#eaae66', '#e5943a', '#dd7a15', '#d55e00')
+
+pale_pal <- 
+  c(green = "#7DA050",
+    orange = "#D19648",
+    teal = "#329985",
+    blue = "#5982A0",
+    purple = "#966283",
+    red = "#9B5249")
+
 f3311 <- mesonet_response[station == "F3311"]
 kcmx <- mesonet_response[station == "KCMX"]
 
@@ -34,9 +49,37 @@ water_dat[levellogger_measurements,
 # lm(ex_sea_level_pressure_cm ~ slp(ex_abs_pressure_cm, ex_air_temperature_c, elevation_cm/100), data = f3311)
 water_dat[, raw_logger_error_cm := dens_water_pressure_cm - (water_depth_cm + ex_sea_level_pressure_cm) + 22500/826]
 
-water_dat[, error_range_cm := error_range(pressure_error_cm, rep(0.5, nrow(.SD)))]
+water_dat[, error_range_cm := error_range(pressure_error_cm, rep(2.7625, nrow(.SD)))]
 water_dat[, elapsed_s := as.numeric(sample_time - min(sample_time)), 
          by = .(serial_number)]
+
+
+# Figure 1
+fig_1 <- 
+  ggplot(water_dat[experiment == "test-dat" & serial_number == "1062534", 
+                   .(sample_time, 
+                     temperature_difference_c, 
+                     water_temperature_c,
+                     error_range_cm, 
+                     raw_logger_error_cm = raw_logger_error_cm - mean(raw_logger_error_cm)), 
+                   by = .(serial_number)][order(sample_time)],
+         aes(y = raw_logger_error_cm,
+             x = water_temperature_c)) + 
+  geom_ribbon(aes(ymin = -error_range_cm/2,
+                  ymax = error_range_cm/2),
+              fill = "gray80") +
+  geom_path(aes(color = temperature_difference_c)) +
+  geom_point(data = water_dat[experiment == "test-dat" & serial_number == "1062534", 
+                              .(sample_time, 
+                                temperature_difference_c, 
+                                water_temperature_c,
+                                error_range_cm, 
+                                raw_logger_error_cm = raw_logger_error_cm - mean(raw_logger_error_cm)), 
+                              by = .(serial_number)][order(sample_time)][1]) + 
+  scale_color_gradientn(colors = blue_orange_scale) + 
+  theme(legend.position = "bottom")
+
+# ggsave("output/figures/figure_1.png", fig_1)
 
 water_training <- 
   water_dat[experiment != "test-dat"]
@@ -56,23 +99,39 @@ ggplot(water_training,
 
 water_training[, temp_diff2 := temperature_difference_c]
 
+calculate_water_alignments <- 
+  function(data, full_data, experiment, driver){
+    vardis_dat <- 
+      full_data[experiment == "stat-sim"]
+    
+    temp_ranges <- 
+      data[,.(min_temp = 0.95 * min(temperature_difference_c), 
+              max_temp = 1.05 * max(temperature_difference_c)),
+           by = .(serial_number)]
+    
+    merged_data <- 
+      vardis_dat[temp_ranges, 
+                 on = c("serial_number", "temp_diff2>=min_temp", "temp_diff2<=max_temp")]
+    
+    merged_data[,.(alignment_offset_cm = mean(raw_logger_error_cm)), by = .(serial_number)]
+  }
+
+
 statsim_means <- 
   water_training[, 
-                .(statsim_mean = water_training[experiment == "stat-sim"][
-                  .SD[,.(min_temp = 0.95 * min(temperature_difference_c), 
-                         max_temp = 1.05 * max(temperature_difference_c))],
-                  on = c("temp_diff2>=min_temp", "temp_diff2<=max_temp")][, 
-                                                                        mean(raw_logger_error_cm)]),
-                by = .(serial_number, experiment)]
+                 calculate_water_alignments(.SD, water_training, "stat-sim"),
+                by = .(experiment)]
 
 water_training[, experimental_mean := mean(raw_logger_error_cm),
               by = .(serial_number, experiment)]
 
+water_training[, alignment_offset_cm := NULL]
+
 water_training[statsim_means, 
-               statsim_mean := statsim_mean, 
+               alignment_offset_cm := alignment_offset_cm, 
                on = c("serial_number", "experiment")]
 
-water_training[, experimental_error := experimental_mean - statsim_mean]
+water_training[, experimental_error := experimental_mean - alignment_offset_cm]
 
 ggplot(water_training,
        aes(x = temperature_difference_c, 
@@ -84,6 +143,33 @@ ggplot(water_training,
 
 water_training[, logger_error_cm := raw_logger_error_cm - experimental_error]
 
+# Figure 3
+
+fig_3 <- 
+  melt(water_training[serial_number == "1062528"], 
+       id.vars = c("experiment", "logger_error_cm"),
+       measure.vars = c("water_temperature_c", "temperature_difference_c"),
+       variable.name = "driver",
+       value.name = "value_c") %>% 
+  .[, driver := factor(driver, levels = c("temperature_difference_c", "water_temperature_c"))] %>% 
+  ggplot(aes(y = logger_error_cm,
+             x = value_c)) + 
+  geom_point(aes(color = experiment, 
+                 shape = experiment)) + 
+  scale_color_manual(values = as.character(pale_pal)) +
+  facet_wrap(~driver,
+             scales = "free_x",
+             as.table = FALSE,
+             strip.position = "bottom") +
+  geom_text(data = data.frame(x = c(-10, 8.5),
+                              y = c(0.95, 0.95),
+                              label = c("A", "B"),
+                              driver = c("temperature_difference_c", "water_temperature_c")),
+            aes(x = x, y = y, label = label)) +
+  theme(legend.position = "top")
+
+ggsave("output/figures/figure_3.png",
+       fig_3)
 
 water_tdiff_models <-
   fit_correction_mod(data = water_training,
@@ -139,6 +225,20 @@ ggplot(water_training,
   geom_point() + 
   facet_wrap(~serial_number, scales = "free")
 
+# Figure 4
+fig_4 <- 
+  ggplot(water_training,
+         aes(y = tdiff_logger_error_cm,
+             x = water_temperature_c,
+             color = experiment, 
+             shape = experiment)) + 
+  geom_point(alpha = 0.6) + 
+  facet_wrap(~serial_number, scales = "free") +
+  scale_color_manual(values = as.character(pale_pal)) +
+  theme(legend.position = "top")
+
+ggsave("output/figures/figure_4.png", fig_4)
+
 # Temp Models
 water_temperature_models <- 
   fit_correction_mod(water_training,
@@ -146,12 +246,38 @@ water_temperature_models <-
                      y = "tdiff_logger_error_cm",
                      by = "serial_number")
 
-mcp_mod <- 
-  mcp(list(tdiff_logger_error_cm ~ water_temperature_c, 
-           ~ water_temperature_c), 
-      data = water_training[serial_number == "2030899"])
+set.seed(1234)
+mcp_mods <- 
+  data.table(serial_number = c("2030899", "2064734"),
+             mods = list(mcp(list(tdiff_logger_error_cm ~ water_temperature_c, 
+                                       ~ water_temperature_c),
+                             data = water_training[serial_number == "2030899"]),
+                         mcp(list(tdiff_logger_error_cm ~ 1, 
+                                  ~ water_temperature_c), 
+                             data = water_training[serial_number == "2064734"])))
 
-plot(mcp_mod, q_predict = TRUE)
+  # water_training[serial_number %in% c("2030899", "2064734"),
+  #                .(mods = list(mcp(list(tdiff_logger_error_cm ~ 1 + water_temperature_c, 
+  #                                       ~ 1 + water_temperature_c), 
+  #                                  data = .SD))),
+  #                by = .(serial_number)]
+
+lapply(mcp_mods$mods, summary)
+mcp_mods[, change_point := sapply(mods, extract_changepoint)]
+mcp_mods
+
+# Figure 5
+fig_5 <- 
+  map2(mcp_mods$mods,
+       mcp_mods$serial_number,
+       ~plot(.x,
+             q_predict = TRUE,
+             lines = FALSE) +
+         ggtitle(.y)) %>% 
+  reduce(`+`)
+
+ggsave("output/figures/figure_5.png",
+       fig_5)
 
 water_training <- 
   correction_residuals(water_temperature_models,
@@ -336,7 +462,7 @@ baro_dat <-
     by = .(serial_number)] %>% 
   set_experiments("data/experimental_design.csv")
 
-baro_dat[, error_range_cm := error_range(pressure_error_cm, rep(0, nrow(.SD)))]
+baro_dat[, error_range_cm := error_range(pressure_error_cm, rep(2.7625, nrow(.SD)))]
 
 baro_training <- 
   baro_dat[experiment != "test-dat"]
@@ -350,21 +476,19 @@ baro_training[, air_temp2 := air_temperature_c]
 
 vardis_means <- 
   baro_training[, 
-                .(vardis_mean = baro_training[experiment == "var-dis"][
-                .SD[,.(min_temp = 0.95 * min(air_temperature_c), 
-                       max_temp = 1.05 * max(air_temperature_c))],
-                on = c("air_temp2>=min_temp", "air_temp2<=max_temp")][, 
-                                                                      mean(raw_logger_error_cm)]),
-                by = .(serial_number, experiment)]
+                calculate_alignments(.SD, baro_training, "var-dis"),
+                by = .(experiment)]
 
 baro_training[, experimental_mean := mean(raw_logger_error_cm),
               by = .(serial_number, experiment)]
 
+baro_training[, alignment_offset_cm := NULL]
+
 baro_training[vardis_means, 
-              vardis_mean := vardis_mean, 
+              alignment_offset_cm := alignment_offset_cm, 
               on = c("serial_number", "experiment")]
 
-baro_training[, experimental_error := experimental_mean - vardis_mean]
+baro_training[, experimental_error := experimental_mean - alignment_offset_cm]
 
 ggplot(baro_training,
        aes(x = air_temperature_c, 
@@ -376,6 +500,28 @@ ggplot(baro_training,
 
 baro_training[, logger_error_cm := raw_logger_error_cm - experimental_error]
 
+# Figure 2
+
+fig_2 <- 
+  {ggplot(baro_training[serial_number == "1065861"],
+          aes(x = air_temperature_c, 
+              color = experiment,
+              shape = experiment)) + 
+      geom_point(aes(y = raw_logger_error_cm)) +
+      theme(legend.position = c(0.025, 0.95),
+            legend.justification = c(0, 1)) +
+      ggplot(baro_training[serial_number == "1065861"],
+             aes(x = air_temperature_c, 
+                 color = experiment,
+                 shape = experiment)) + 
+      geom_point(aes(y = logger_error_cm),
+                 show.legend = FALSE)} *
+  theme(aspect.ratio = 1) *
+  scale_color_manual(values = as.character(pale_pal[1:4]))+
+  plot_annotation(tag_levels = "A")
+
+ggsave("output/figures/figure_2.png",
+       fig_2)
 
 # Temp Models
 baro_temperature_models <- 
@@ -559,7 +705,8 @@ baro_testing[baro_delta_t_models,
              delta_t_adjustment := slope * (delta_t_c_min - x_intercept) - intercept,
              on = "serial_number"]
 
-baro_testing[abs(delta_t_c_min) <= 0.05, delta_t_adjustment := 0]
+# Only apply cumulative impact if delta T was greater than 1 unit of resolution
+baro_testing[abs(delta_t_c_min) <= 0.1, delta_t_adjustment := 0]
 
 baro_testing[, cum_delta_t_adjustment := cumsum(delta_t_adjustment),
              by = .(serial_number, experiment)]
@@ -697,7 +844,8 @@ baro_mad <-
 
 boxplot(mad_cm ~ correction_method,
         data = baro_mad)
-abline(h = 0.1)
+# Measurement resolution
+abline(h = 0.1 + (0.01 * 34.531554269))
 
 
 full_baro <- 
