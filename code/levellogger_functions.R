@@ -537,3 +537,20 @@ slp <-
     slp_hPa / 98.0665
   }
 
+# Calculate alignments between experiments
+calculate_alignments <- 
+  function(data, full_data, experiment){
+    vardis_dat <- 
+      full_data[experiment == "var-dis"]
+    
+    temp_ranges <- 
+      data[,.(min_temp = 0.95 * min(air_temperature_c), 
+              max_temp = 1.05 * max(air_temperature_c)),
+           by = .(serial_number)]
+    
+    merged_data <- 
+      vardis_dat[temp_ranges, 
+                 on = c("serial_number", "air_temp2>=min_temp", "air_temp2<=max_temp")]
+    
+    merged_data[,.(alignment_offset_cm = mean(raw_logger_error_cm)), by = .(serial_number)]
+  }
