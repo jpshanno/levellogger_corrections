@@ -1,25 +1,10 @@
 ---
 # Choose from this list of Journals:
-# JGR: Atmospheres, JGR: Biogeosciences, JGR: Earth Surface, 
-# JGR: Oceans, JGR: Planets, JGR: Solid Earth, JGR: Space Physics, 
-# Global Biogeochemical Cycles, Geophysical Research Letters, 
-# Paleoceanography and Paleoclimatology, Radio Science, Reviews of Geophysics, 
-# Tectonics, Space Weather, Water Resources Research, Geochemistry, Geophysics, 
-# Geosystems, Journal of Advances in Modeling Earth Systems (JAMES),
-# Earth's Future, Earth and Space Science, Geohealth
 journal: "Water Resources Research"
 # Use draft to submit a paper
 classoption: "draft,linenumbers"
-# A title should be specific, informative, and brief. Use
-# abbreviations only if they are defined in the abstract. Titles that
-# start with general keywords then specific terms are optimized in
-# searches
-title: "True Water Level Uncertainty"
+title: "Water Level Errors and their Impact on True Water Level Uncertainty"
 # First name or initial followed by last name
-# Authors are individuals who have significantly contributed to the
-# research and preparation of the article. Group authors are allowed, if
-# each author in the group is separately identified in an appendix.
-# Additional author notes should be indicated with
 authors:
   - name: Joseph P. Shannon
     affil: 1
@@ -34,8 +19,6 @@ affiliations:
     name: "Michigan Technological University, College of Forest Resources and Environmental Science"
   # - number: 2
   #   name: "The second affiliation"
-# More than one corresponding author is allowed in this LaTeX file and for
-# publication; but only one corresponding author is allowed in our editorial system.
 corresponding_author:
   - name: Joseph P. Shannon
     email: jpshanno@mtu.edu
@@ -46,7 +29,9 @@ keypoints:
 abstract: "A good abstract will begin with a short description of the problem being addressed, briefly describe the new data or analyses, then briefly states the main conclusion(s) and how they are supported and uncertainties."
 plain_language_summary: "Some journals require a plain language summary. See: https://publications.agu.org/author-resource-center/text-requirements/#abstract"
 output: 
-    rticles::agu_article
+    bookdown::word_document2:
+    bookdown::pdf_document2:
+      base_format: rticles::agu_article
 bibliography: "`r rbbt::bbt_write_bib('biblio.bib', translator = 'bibtex', overwrite = TRUE)`"
 header-includes: 
       - \usepackage{soulutf8}  # For UTF8 chars in TrackChanges
@@ -56,6 +41,8 @@ header-includes:
 ---
 
 ```{r echo=FALSE}
+library(drake)
+library(data.table)
 # Some recommended settings. 
 knitr::opts_chunk$set(
   echo = FALSE,
@@ -75,78 +62,119 @@ if (any(nchar(rmarkdown::metadata$keypoints) > 100)) {
 }
 ```
 
-**NEED TO CHANGE TERMINOLOGY FROM LEVELLOGGER TO ...**
+# Notes
+
+Say if the manufacturers state the source of the errors. What causes the error,
+and why do I need to still compensate for it.
+
+Figure 1 explanation: state more clearly that it is two interacting errors, not
+delta T. State how some models may not be counteracting, but instead will be
+compounding
+
+Figure 3: Add panel C showing what is in Panel 4. Panel A + Panel B = Panel C.
+Panel B shows no pattern and errors within range of instrument error, might be
+good to build up into a relationship for Figure 1
 
 # Introduction
 
-Much research in and monitoring of water levels for wells, wetland surface
-water, and stream discharge __(sewer discharge and other applications too)__
-utilize pressure-transducer measurements. These instruments are easy to deploy,
-require minimum access to the instrument, and onboard datalogging provides
-long-term continuous records in an easily analyzed format. However it has been
-pointed out that "these systems commonly are not adequately supported by quality-assurance procedures." [@freeman-2004, p. 1]. Freeman [-@freeman-2004] went on to highlight
-temperature gradients as a source of error, and in the same year Cain [-@cain-2004] 
-examined temperature-derived artifacts within vented transducers.Working with
-absolute transducers artifacts were shown to be the result of the temperature
-of instrument [@moore-2016], as well as of differing thermal regimes between
-barometric and water pressure instruments [@cuevas-2010; @mclaughlin-2011].
-@moore-2016 suggests that all loggers be tested for inaccuracies over the range
-of temperature measurements and individual calibrations be developed to apply 
-to collected data. 
+Hydrologic monitoring for research and management, including monitoring
+wells, piezometers, and stream discharge, often utilizes submerged pressure-transducer
+measurements. These instruments are easy to deploy, require minimum access to
+the instrument, and on-board datalogging provides long-term continuous records in
+an easily analyzed format. These instruments have been developed in two major
+configurations: absolute or unvented, and gauge or vented. Absolute transducers measure
+pressure relative to some fixed pressure contained on one side of a flexible
+membrane. Gauge transducers measure pressure across a similar membrane relative to
+a chamber connected to the atmosphere via a vent tube. Speaking generally of
+pressure transducers in hydrologic monitoring, it has been pointed out that
+"these systems commonly are not adequately supported by quality-assurance
+procedures." [@freeman-2004, p. 1]. Freeman [-@freeman-2004] went on to
+highlight water temperature gradients as a source of error, and in the same year Cain
+[-@cain-2004] examined temperature-derived artifacts within gauge transducers.
+Within absolute transducers artifacts were shown to be the result of the
+temperature of instrument [@moore-2016], as well as of differing thermal regimes
+between barometric and water pressure instruments [@cuevas-2010;
+@mclaughlin-2011]. Moore [-@moore-2016] goes on to suggest that suggests that 
+all transducers be tested for inaccuracies over the range of temperature 
+measurements and individual compensation equations be developed to apply to collected data.
 
-Mclaughlin [-@mclaughlin-2011] found that temperature differentials between levellogger
-measurements introduced detectable artifacts with __%ERROR__. These results are
-similar to @cuevas-2010, who found a __%ERROR__ was possible when barometric and
-water loggers were deployed in different thermal settings. Both Mclaughlin
-[-@mclaughlin-2011] and Cuevas [-@cuevas-2010] focused on absoulte transducers,
+McLaughlin [-@mclaughlin-2011] found that temperature differentials between 
+water and barometric pressure measurements introduced detectable artifacts showing a 1.5 cm
+increase in the diurnal variation. These results are similar to @cuevas-2010,
+who found a 19% increase in streamflow diurnal fluctuation when barometric and
+water transducers were deployed in different thermal settings. Both McLaughlin
+[-@mclaughlin-2011] and Cuevas [-@cuevas-2010] focused on absolute transducers,
 but similar work has also been performed using vented gauge transducers. The
 findings of @cain-2004, that temperature changes within the vent-tube of gauge
-pressure transducers introduce water level artifacts was explored further by
-[@gribovszki-2013] in a field experiment. @liu-2015 performed a multi-day
-laboratory and long-term field study of gauge transducers. Their findings show
-that the temperature differentials can be an important source of error in water
-level readings. 
+pressure transducers introduce water level artifacts, was explored further by
+Liu [-@liu-2015] in multi-day laboratory and long-term field experiments. Their 
+findings show that the temperature differentials can be an important source of
+error in water level readings from gauge transducers. They also highlight the 
+impact of rate of temperature change, with more rapid gradients inducing larger
+water level errors. This is supported for absolute and gauge transducers, which 
+both rely on equilibrium temperatures within internal electronics and membranes
+[@freeman-2004].
 
-The implications of the above studies is that in addition to instrument
-accuracy, there is additional error to be corrected adding to the total
-measurement uncertainty. For gauge transducers the air pressure is not measured
-on a separate transducer and so the sources of error are the water temperature
-and the air temperature. For absolute transducers there are three potential
-sources of error, the air temperature (barometric logger), the water temperature
-(water logger) and the temperature difference between the two. Previous studies
-have looked at absolute transducer error due to individual transducer error
-[@cain-2004] and due temperature differences between loggers [@mclaughlin-2011].
-To date no study has examined the interaction of these two effects on water
-level errors. We believe that may be the result of opposite effect directions.
-The two effects can contract one another, keeping the water level within
-instrument accuracy bounds while still displaying clear trends and/or hysteresis
-loops (Figure 1).
+Implied in the above studies is additional error, beyond instrument accuracy,
+that should consered in the estimate of total measurement uncertainty. For both
+absolute and guage transducers there are three potential sources of uncertainty, the 
+air temperature (barometric tranducer), the water temperature (water tranducer) and the
+temperature difference between the two. Previous studies have looked at absolute
+transducer error due to individual transducer error [@moore-2016] and due
+temperature differences between tranducers [@mclaughlin-2011]. To date no study
+has examined the interaction of these two effects on water level errors. We
+believe that may be the result of opposite effect directions. The two effects
+can counteract one another, keeping the water level within instrument accuracy
+bounds while still displaying clear trends and/or hysteresis loops, thus hiding
+the errors from casual inspection (Figure \@ref(fig:figure-1)). This is
+supported by Liu and Higgins [-@liu-2015, p. 72] who in their conclusion state
+that "measurement of the water level...is not simple".
 
-Figure 1: Water level error as function of water temperature recorded by the logger. The line color indicates the temperature difference between the water and air.
+```{r figure-1, fig.cap="Figure 1: Water level error as function of water temperature recorded by the instrument. The line sequential connects the data point and the line color indicates the temperature difference between the water and air. The black point represents the start of the experimental period with a clockwise hystersis loop. The dashed lines represent the combined errors of the water pressure transducer and F3311 barometric sensor."}
 
-Evapotranspiration has been estimated by the diurnal signal in well water levels
-and streamflow **CITATIONS**. Correcting for temperature-induced errors is
-essential to ensure that the observed flucuations are real and not an artifact.
-@Cuevas-2010 and @gribovszki-2013 do validate their measurements with manual
-readings over the course of at least one 24-hour period. However, there are no
-studies to date examining the combined impact of instrument error and correction
-error to estimate the full uncertaintly of measurements. @tamari-2010
-highlighted important differences in how logger uncertainty can be expressed,
-and how just instrument error may be enough to mask the targetted signal.
+knitr::include_graphics("../output/figures/figure_1.png")
+
+```
+
+
+Looking at the studies above, it is clear to see that temperature-induced errors
+are most apparent in field data when examining diurnal signals.
+Evapotranspiration and groundwater flow have been estimated by the diurnal
+signal in well water levels and streamflow [@carlsonmazur-2014; @kirchner-2009;
+@loheide-2005; @mclaughlin-2014; @watras-2017; @white-1932]. Because these 
+finding serve as a basis for other research and modeling efforts, errors in
+diurnal signals will lead to additional skewed results. Therefore, correcting
+for temperature-induced errors is essential to ensure that the observed
+fluctuations are real and not an artifact. Cuevas [-@cuevas-2010] and Gribovszki
+[-@gribovszki-2013] do validate their measurements with manual readings over the
+course of at least one 24-hour period. However, to be fully effective in field
+studies, these types of diurnal fluctuation validations would have to happen
+across the range of temperature and evapotranspiration/groundwater measurements
+throughout the monitoring period. This is often unfeasible for reasons related,
+but not limited to, budget, logistics, and safety. This leaves laboratory-derived
+compensation equations as the best alternative option, as recommended by Moore
+[-@moore-2016] and Liu [-@liu-2015].
+
+While compensation equations can provide more assurance that observed diurnal
+signals are real, no studies to date examining the combined impact of instrument
+and compensation errors to estimate the full uncertainty of measurements. Even
+the relatively simple task of measuring water level in a tank may be masked by
+propagating instrument uncertainty through to final water levels [@tamari-2010].
 Therefore instrument error, and any uncertainty in correcting the intra- and
-interlogger artifacts, should be propagated through to the final water level
-record. Propagated uncertainty will provide a detection limit for true diurnal
-signals. Without additional validation (through manual measurements or other
-instrumentation), diurnal patterns below this detection limit must be considered
-artifacts. As such we suggest that estimates of diurnal signal should be
-analyzed as a left-censored dataset.
+inter-tranducer artifacts, should be propagated through to the final water level
+record. Such propagated uncertainty will provide a detection limit for true
+diurnal signals. Without additional validation (through manual measurements or
+other instrumentation), diurnal patterns below this detection limit must be
+considered artifacts. As such we suggest that estimates of diurnal signal should
+be analyzed as a left-censored dataset, with the detection limit determined by
+the specifics of instrumentation and compensation equations.
 
 In this note we present a lab experiment to isolate and model the separate
-impacts of intra- and inter-logger temperature response. We demonstrate how 
+impacts of intra- and inter-tranducer temperature response. We demonstrate how
 these effects may mask one another resulting in water level errors within the
-range of instrument error. We present the corrected and uncorrected water
-levels on a test set of laboratory data at as well representative data from an
-ongoing hydrologic study. Finally we demonstrate the true uncertainty, compare 
+range of instrument error. We present the corrected and uncorrected water levels
+on a test set of laboratory data at as well representative data from an ongoing
+hydrologic field study. Finally we calculate the propagated uncertainty, compare
 this to instrument error, and evaluate both against published diurnal water
 level fluctuations.
 
@@ -155,52 +183,71 @@ level fluctuations.
 ## Data Collection & Preparation
 
 We have conducted four experiments to determine the direct impact of temperature
-regimes on levellogger water and barometric measurements as well as temperature
-differentials. In this context a levellogger consists of a absolute pressure
-transducer, temperature sensor, and on-board data storage. The experiments
-represent a fully crossed design with stable and variable temperatures and
-similar and dissimilar air and water thermal regimes. Eightteen levelloggers of
-varying age and model, all manufactured by Solinst, Ltd. (Georgetown, ON,
-Canada), were used to recorded water levels ( __TABLE 1__). Two levelloggers,
-both Solinst Levellogger Juniors, were used to monitor barometric pressure. All
-levelloggers attempt to provide internal temperature compenstation on
-temperature measurments. Reference barometric pressure was obtained from the
-Automatic Position Reporting System WX NET/Citizen Weather Observer Program
-station FW3311. Station FW3311 is located 3 km away and 77m higher than the
-study location. Data for the study period were retreived using the Synoptic
-Mesonet API (https://developers.synopticdata.com/mesonet/v2/).
+regimes and differentials on water and barometric pressure measurements. The
+experiments represent a fully crossed design with stable and variable
+temperatures and similar and dissimilar air and water thermal regimes (Table \@ref(tab:experiments)). Eighteen
+pressure transducers of varying age and model, all manufactured by Solinst, Ltd.
+(Georgetown, ON, Canada), were used to record water levels
+(Table \@ref(tab:loggers)). Two of these transducers, both Solinst Levellogger Juniors,
+were used to monitor barometric pressure. All instruments contained an absolute
+pressure transducer, temperature sensor, on-board data logging and attempt to
+provide internal temperature compensation on temperature measurements. Reference
+barometric pressure was obtained from the Automatic Position Reporting System WX
+NET/Citizen Weather Observer Program station F3311. Station F3311 is located 3
+km away and 77m higher than the study location. Data for the study period were
+retrieved using the Synoptic Mesonet API
+(https://developers.synopticdata.com/mesonet/v2/). Station F3311 is equipped with
+a Ambient Weather WS-2080 Weather Station (Ambient Weather, Chandler, AZ, USA)
 
-Water levelloggers were suspended from a brace across a large container. The
-levelloggers were suspended in a manner to align the zero point of each logger.
-The loggers were covered with a fixed depth of water and a layer of canola oil
+```{r experiments}
+experiments <- 
+  data.table(Experiment = c("stat-sim", "stat-dis", "var-sim", "var-dis", "test-data"),
+             Temperature = c("Stable", "Stable", "Variable", "Variable", "Variable"),
+             `Air/Water Temperature Differential` = c("Similar", "Dissimilar", "Similar", "Dissimilar", "Dissimilar"))
+
+knitr::kable(experiments,
+             align = "c",
+             caption = "Description of experimental conditions.")
+```
+
+```{r loggers}
+drake::loadd(logger_metadata)
+knitr::kable(logger_metadata[, .(serial_number, instrument_type, pressure_error_cm, temperature_error_c)],
+             align = "c",
+             caption = "Summary of pressure transducer model type and associated errors. __ADD MEASUREMENT RESOLUTION__ Do summary table by logger type and count of loggers instead of serial numbers")
+```
+
+Water level transducers were suspended from a brace across a large container with
+the transducers zero points aligned.
+The transducers were covered with a fixed depth of water and a layer of canola oil
 was added to prevent evaporation over the length of the experiment. Water level
 was measured at the start and end of experimental period to confirm no
 evaporation. To provide thermally similar air and water environments we placed a
 graduated cylinder in the center of the water. The cylinder was partially filled
-with gravel and water to counteract the bouyancy of the cylinder. During the two
-experiments with sychronous thermal regimes the two barometric loggers were
+with gravel and water to counteract the buoyancy of the cylinder. During the two
+experiments with synchronous thermal regimes the two barometric transducers were
 suspended directly above the gravel surface. The entire apparatus was covered
 loosely with aluminum foil to prevent direct wind effects. For stable thermal
-regimes the experiments were conducted in a non-climate controled  basement to
-minimze temperature fluctions. Varying thermal regime experiments were conducted
-outdoors, out of direct solar radiation. The barometric loggers were placed
-under a black radiation shield to magnify temperature differentials and induce
-noise from rapid temperature flucations [@liu-2015]. A test set of data
+regimes the experiments were conducted in a non-climate controlled basement to
+minimize temperature fluctuations. Varying thermal regime experiments were conducted
+outdoors, out of direct solar radiation. The barometric transducers were placed
+under a black radiation shield to magnify temperature differentials and purposely
+induce noise from rapid temperature fluctuations [@liu-2015]. A test set of data
 collected under variable, dissimilar conditions was collected to evaluate the
 compensation models.
 
-Levelloggers were deployed and data retreived using using Solinst Levellogger v.
-4.4.0 software. Loggers were set to record at 1-minute intervals with time
+Transducers were deployed and data retrieved using using Solinst Levellogger v.
+4.4.0 software. Transducers were set to record at 1-minute intervals with time
 synchronized to computer time at launch. The four experiments were run serially
-without retreiving data from the loggers. A settling time of at least 30 minutes
-was observed after barometric loggers or entire experimental apparatus were
-relocated. Exact experiment start and end times were determined in a post-hoc
-manner to remove periods of extreme rates of temperature change when water or
-barometric loggers were repositioned as this introduces known additional errors
-[@liu-2015].
+without retrieving data from the Transducers A settling time of at least 30
+minutes was observed after barometric tranducers or entire experimental apparatus
+were relocated. Exact experiment start and end times were determined in a
+post-hoc manner to remove periods of extreme rates of temperature change when
+water or barometric tranducers were repositioned as this introduces known
+additional errors [@liu-2015].
 
 All data processing and analysis was performed in R [@rcoreteam-2019] using the
-pacakges `data.table` [@dowle-2019] for data manipulation, `ggplot2`
+packages `data.table` [@dowle-2019] for data manipulation, `ggplot2`
 [@wickham-2016] and `patchwork` [@pedersen-2019a] for visualization, `mcp`
 [@lindelov-2020] for change point analysis, and `httr` [@wickham-2019a] for
 Mesonet API access and caching. The `drake` [@landau-2018], `rmarkdown`
@@ -210,163 +257,157 @@ publication.
 
 ## Pressure Transducer Compensation
 
-All of the sensors used in this study are designed to measure prsesure at a
+All of the sensors used in this study are designed to measure pressure at a
 relatively constant temperature and utilize a fixed water density of 1000 $kg
-m^{-3}$ to convert pressure to depth __(Personal Communication, Solinst)__. To
+m^{-3}$ to convert pressure to depth (Personal Communication, Solinst). To
 account for the larger range of temperatures observed in this study the recorded
 pressure was adjusted to account for the variable density of water.
 $$h_{r} = h\;\mathsf{x}\;\frac{1000}{\rho_T}$$ 
 where $\rho_T$ is the density of water as a function of temperature taken from
-[@tanaka-2001, Eq. 1]. For all models specified below correction of pressure 
-errors were not applied when a model slope was not signficant at the $\alpha$=0.05
+[@tanaka-2001, Eq. 1]. For all models specified below compensation of pressure 
+errors were not applied when a model slope was not significant at the $\alpha$=0.05
 level.
 
 ### Barometric Pressure
 
-For barometric loggers, we fit an ordinary least squares regression between the
-barometric error ($\epsilon_a = P_{a} - P_{F3311}$) and air temperature. While the loggers
+For barometric transducers, we fit an ordinary least squares regression between the
+barometric error ($\epsilon_a = P_{a} - P_{F3311}$) and air temperature. While the tranducers
 were moved during the study their position relative to F3311 and each other
 shifted slightly. To align the data across experiments, data from each
-experiment and logger were shifted by the difference of mean pressure of that
-experiment and *var-dis* within the same air temperature range (Figure 2).
+experiment and tranducer were shifted by the difference of mean pressure of that
+experiment and *var-dis* within the same air temperature range (Figure \@ref(fig:baro-alignment)).
 Barometric pressure errors were aligned to *var-dis* because *var-dis*
 conditions most closely correlate to F3311 conditions (outdoors, open to the
 air).
 
-Figure 2: Error in barometric pressure relative to an external station. Hollow
-shapes represent raw error values and solid shapes represent aligned error 
-values. Error values were aligned within loggers by the difference in mean 
-pressure between an experiment and *var-dis* pressure within the same range of
-air temperature.
+```{r baro-alignment, fig.cap = "Error in barometric pressure relative to an external station for tranducer 1065861. Panel A represents raw error values, and panel B represent aligned error values. Error values were aligned within tranducers by the difference in mean pressure between an experiment and *var-dis* mean pressure within the same range of air temperature."}
 
-Temperature compensation models were applied to recorded $P_a$ using equation 3
+knitr::include_graphics("../output/figures/figure_2.png")
+
+```
+
+Temperature compensation models were applied to $P_a$ using equation 3
 in Moore [-@moore-2016]. Temperature-compensated air pressure was then used to
 calculate an updated $\epsilon_a$. We observed a trend between the updated 
-$\epsilon_a$ and rate of temperature change ($^oC\;min^{-1}$). A second OLS regression
-was fit to all observations where $abs(^oC\;min^{-1}) > 0.05$, where 0.05 is
-half of the temperature resolution of these loggers ($0.1 ^oC$). These rapid
+$\epsilon_a$ and rate of temperature change ($\Delta T^oC\;min^{-1}$). A second OLS regression
+was fit to all observations where $abs(\Delta T) > 0.05$, where 0.05 is
+half of the temperature resolution of these tranducers ($0.1 ^oC$). These rapid
 shifts also result in an offset in recorded pressure, likely the result of a
 delay in the internal components equilibrating to the new temperature
 [@freeman-2004]. This shift can be removed by applying the cumulative impact of
 the $\Delta T$ model. 
 
-Following compensation for $\Delta T$ updated $\epsilon_a$ was visually compared
-to $T_a$, $\Delta T_a$, and the temperature difference between the levellogger
+Following compensation for $\Delta T$, we compared updated $\epsilon_a$ visually 
+to $T_a$, $\Delta T_a$, and the temperature difference between the transducer
 and F3311 air temperatures. With no trends remaining the authors feel confident
-that systemic artificats have been addressed.
+that systemic artifacts have been addressed.
 
 ### Water Pressure
 
 Water pressure error $\epsilon_w$ was calculated as the difference between recorded pressure
-and the sum of the known water depth and sea level pressure at F3311. Sea level 
+and the sum of the known water depth and sea level pressure at F3311 ($\epsilon_w\;=\;P_w - (D_w + SLP_{F3311})$. Sea level 
 pressure calculations adjust absolute pressure to address the varying
 lapse rates of atmospheric density due to temperature and elevation **CITATION**.
 Accounting for these lapse rates provides a more accurate measure of the actual
 atmospheric pressure at the water surface. Error rates were correlated with the
 water temperature ($T_w$) and temperature difference ($\Delta T_{a,w}$) 
 between the water and air ($T_a$). Examining the data show that 
-$\Delta T_{a,w}$ was the controling factor, creating hystersis loops and 
+$\Delta T_{a,w}$ was the controlling factor, creating hysteresis loops and 
 non-linearity in the relationship with $T_w$ (Figure 3). 
 
-Figure 3: Water pressure error as a function of (A) temperature difference 
-($T_{air} - T_{water}$) and (B) water temperature.
+```{r water-error-drivers, fig.cap = "Water pressure error as a function of (A) temperature difference ($T_{air} - T_{water}$) and (B) water temperature for tranducer. Water pressure errors have been aligned to *stat-sim* errors"}
+
+knitr::include_graphics("../output/figures/figure_3.png")
+
+```
 
 We fit an OLS linear regression between $\epsilon_w$ and $\Delta T_{a,w}$ for
-each water levellogger. Prior to fitting, the regression data between
-experiments were aligned as for barometric loggers (above) using *stat-sim* as
+each water transducer. Prior to fitting, the regression data between
+experiments were aligned as for barometric tranducers (above) using *stat-sim* as
 the reference. Data from *stat-sim* were used because stable water temperatures
-result in perceived trends that are only tje result of $\Delta T_{a,w}$. Using the
+result in perceived trends that are only the result of $\Delta T_{a,w}$. Using the
 temperature-differential models water pressure was compensated and $\epsilon_w$
-was updated. Almost all loggers now showed a clear linear relationship between
-$\epsilon_w$ and $T_w$. For these loggers an OLS was fit, but for two loggers
+was updated. Almost all tranducers now showed a clear linear relationship between
+$\epsilon_w$ and $T_w$. For these tranducers an OLS was fit, but for two tranducers
 2030899 and 2064734, there was a breakpoint in the relationship between 
-$\epsilon_w$ and $T_w$ (Figure 4). For these loggers changepoint analysis was 
+$\epsilon_w$ and $T_w$ (Figure \@ref(fig:water-temps)). For these tranducers changepoint analysis was 
 performed to identify the breakpoint using a fixed intercept and variance and 
 varying slopes (Figure 5).
 
-Figure 4: Water pressure error as a function of water temperature after 
-compensation for difference between water and air temperature. Note loggers 
-2030899 and 2064734 have clear breaks in the relationship.
+```{r water-temps, fig.cap = "Water pressure error as a function of water temperature after compensation for difference between water and air temperature. Note tranducers 2030899 and 2064734 have clear breaks in the relationship."}
 
+knitr::include_graphics("../output/figures/figure_4.png")
 
-Figure 5: Changepoint models for loggers 2030899 and 2064734
+```
+
+```{r mcp-mods, fig.cap = "Changepoint models for tranducers 2030899 and 2064734. Dashed lines represent 95% credibility intervals for prediction, solid lines represent posterior distribution of change point."}
+
+knitr::include_graphics("../output/figures/figure_5.png")
+
+```
 
 Water temperature compensation was applied to the differential-compensated
-water pressure and $\epsilon_w$ was updated. Based on logger model the threshold
+water pressure and $\epsilon_w$ was updated. Based on tranducer model the threshold
 for $\Delta T_w$ models varied between 0.00015 and 0.05 $^oC\;min^{-1}$ dependent 
-on the resolution of the temperature sensor. Unlike the barometric loggers the
+on the resolution of the temperature sensor. Unlike the barometric tranducers the
 $\Delta T_w$ water models did not present a persistent mean offset and the 
 additional step of adding the cumulative impact was not deemed necessary.
-
-<!-- delta_t models should be an offset model because the rest of the residuals are -->
-<!-- centered on 0, but the delta_t values are not. So it should offset and it should -->
-<!-- center. And if this holds may have to offset earlier to correct for experimental -->
-<!-- shifts. Need to look at doing the offset earlier. Also it looks like for -->
-<!-- absolute pressure you subtract the extra pressure (- cumualitive effect), but -->
-<!-- for SLP the sign is reversed. Need to make sure I explain that properly. I think -->
-<!-- it has to do with the fact that the SLP correction relates temperature to total -->
-<!-- atmospheric pressure. Need to think on this -> Artifical increases in -->
-<!-- temperature will represent as a lower SLP (higher lapse rate?) for a given  -->
-<!-- pressure. So we need to increase the pressure to match the artifical increase in -->
-<!-- pressure. I should be able to make a figure that shows this to have when  -->
-<!-- explaining this or responding to reviewers. -->
 
 ## Compensation Evaluation
 
 To ensure independent evaluation of compensation errors the effectiveness of
-compensation was performed using the withheld test set (*test-dat*) of data. The
+compensation was performed using the withheld test set (*test-data*) of data. The
 testing data were collected under variable, dissimilar temperature regimes to
 ensure that all potential compensations were employed After all necessary
 compensation steps were completed we centered the rectified pressure readings by
-subtracting the mean residual error within each logger and experiment.
-Levellogger compensations were evaluated based on two critera: number of
+subtracting the mean residual error within each tranducer and experiment.
+Instrument compensations were evaluated based on two criteria: number of
 recorded points which fell outside of the range of combined instrument errors
 ($n_\epsilon$) and the median absolute deviation (MAD) from the true values as a
-percentage of the true value. Differences were tested using ANOVA? LMER? with a
+percentage of the true value. Differences were tested using ANOVA with a
 post-hoc Tukey HSD analysis to compare between correction methods.
 
-The purpose of developing barometric and water levellogger compensations is to 
+The purpose of developing barometric and water tranducer compensations is to 
 correct field-collected data where no reference pressure is available. 
 To evaluate the combined performance of the compensation steps, 
-fully-compensated barometric and water pressures from the *test-dat* dataset 
+fully-compensated barometric and water pressures from the *test-data* dataset 
 were used to calculate water level. The evaluation metrics of $n_\epsilon$ and 
 MAD were calculated and compared against naive water level calculation and water 
 level calculated from rectified water pressure and external barometric pressure. 
 
 For further validation, representative data from ongoing field research using 
-these levelloggers is evaluted using raw and compensated water and air pressure.
+these instruments is evaluated using raw and compensated water and air pressure.
 These data are from a site in the western Upper Peninsula of Michigan in sites
 located in black ash wetlands. Details on the hydrology of these sites can be
 found in Van Grinsven _et al_ [-@vangrinsven-2017]. The data used in this analysis
 are from well water levels collected from a 1.25" driven monitoring well driven 
 and a 6" parshall flume on an intermittent stream which serves as the outflow of
 this headwater wetland. Well level, flume level, and barometric data were 
-collected with levelloggers ######, ######, and ###### respectively. To stay 
-within the scope of this article just one week of data were choosen for each
+collected with instruments ######, ######, and ###### respectively. To stay 
+within the scope of this article just one week of data were chosen for each
 water source. As these periods only include one manual measurement each, 
 calculating error metrics were not calculated. Rather the quality of the 
 resulting time series is evaluated qualitatively with an emphasis on timing of
 water level peaks and drawdown.
 
-
 ## Uncertainty Analysis
 
-The two evaluation metrics above were calculated for each logger and for each
+The two evaluation metrics above were calculated for each tranducer and for each
 experimental period for the raw recorded pressure and the rectified pressure.
 Intermediate steps in the compensation were evaluated in the same manner to
 quantify the relative error introduced from each source of error. We also
 present a full accounting of the uncertainty of water levels derived from
-compensated readings. A Bayesian model encompassing all of the water and
+compensated readings. A hierarchical Bayesian model encompassing all of the water and
 barometric compensation steps was constructed to calculate water level for the
 test data set. For this model each observation is considered to come from a
 normally distributed dataset centered on the recorded value with a standard
-devation derived from the stated accuracy of the instruments. Within the model
-the results of each compensation are fed into the subsequent step, propagating
-the uncertainty from instrument error to final compensated pressure. This 
-analysis was performed in Stan.
-
-# Data
-
+deviation derived from the stated accuracy and precision of the instruments.
+Within the model the results of each compensation are fed into the subsequent
+step, propagating the uncertainty from instrument error to final compensated
+pressure. This analysis was performed in Stan. This model is applied to the 
+*test-data* dataset for comparison to derived compensations. The model is then
+applied to the selected field data and the magnitude of diurnal fluctuations 
+seen throughout a growing season.
 
 # Results
 
@@ -374,67 +415,12 @@ There was a storm that came through, could have strong pressure gradient
 One barologger found resting on gravel/in water in cylinder during variable,
 similar experiment.
 
-Or section title might be a descriptive heading about the results
-
-Enter Figures and Tables near as possible to where they are first mentioned:
-DO NOT USE \\psfrag or \\subfigure commands.
-DO NOT USE \\newcommand, \\renewcommand, or \\def, etc.
-
-```{r}
-plot(pressure)
-```
-
-Example table
-
-\begin{table}
- \caption{Time of the Transition Between Phase 1 and Phase 2$^{a}$}
- \centering
- \begin{tabular}{l c}
- \hline
-  Run  & Time (min)  \\
- \hline
-   $l1$  & 260   \\
-   $l2$  & 300   \\
-   $l3$  & 340   \\
-   $h1$  & 270   \\
-   $h2$  & 250   \\
-   $h3$  & 380   \\
-   $r1$  & 370   \\
-   $r2$  & 390   \\
- \hline
- \multicolumn{2}{l}{$^{a}$Footnote text here.}
- \end{tabular}
- \end{table}
-
-AGU prefers the use of {sidewaystable} over {landscapetable} as it causes fewer problems.
-
-```{r, fig.env = "sidewaysfigure"}
-plot(pressure)
-```
-
-\begin{sidewaystable}
-\caption{Caption here}
-\label{tab:signif_gap_clos}
-\begin{tabular}{ccc}
-one&two&three\\
-four&five&six
-\end{tabular}
-\end{sidewaystable}
-
-If using numbered lines, please surround equations with \\begin{linenomath\*}... \\end{linenomath\*}
-
-\begin{linenomath*}
-\begin{equation}
-y|{f} \sim g(m, \sigma)
-\end{equation}
-\end{linenomath*}
-
 # Conclusions
-Could need a greater range of tempertures during var-sim to really check for
+Could need a greater range of temperatures during var-sim to really check for
 temperature impacts.
 
 When correcting the barometric data knowing the air temperature difference is
-important becuase it provides the threshold for useable data for the correction
+important because it provides the threshold for usable data for the correction
 models. You can then discard the data where temperature difference is above the
 threshold and expect your final predictions to have higher errors where
 temperature difference is greater.
@@ -453,7 +439,7 @@ against this. The first is the idealistic argument that we should want the
 correct data for the correct reason. Have measurements stay within the error
 bounds due to competing biases is not a good strategy from an idealistic or a
 pragmatic view. The points that are most likely to lie outside of the error
-bounds have the greatest temperature difference between loggers or show the
+bounds have the greatest temperature difference between tranducers or show the
 fastest rate of change. These are often significant events: changes in flow
 following a storm or periods of peak ET where water temperature and air
 temperature are likely to be at their maximum. Building on these two reasons is
@@ -479,11 +465,11 @@ general systematic offsets are corrected through manual calibration measurements
 during deployment. If deployed conditions will not allow for manual calibration
 measurements, the above approaches are applicable, but offsets must be carefully
 calculated. This will involve know the exact elevation difference between 
-the instrument supplying reference pressure measurments and prsesure transducers
+the instrument supplying reference pressure measurements and pressure transducers
 during calibration.
 
-I cannot compare if the water level errrors are of fixed magnitude or percentage
-based. I could make some educated guess from the barometric loggers though.
+I cannot compare if the water level errors are of fixed magnitude or percentage
+based. I could make some educated guess from the barometric tranducers though.
 
 ## Recommendations
 
@@ -496,8 +482,8 @@ developed individually for any external stations that may be used to back-fill
 missing experimental or monitoring data. Or inversely that back-fill sources
 are corrected to match your pressure transducers.
 
-- For each new logger check for *all* potential error-inducing sources. Each 
-logger should be checked for temperature gradients, temperature difference
+- For each new tranducer check for *all* potential error-inducing sources. Each 
+tranducer should be checked for temperature gradients, temperature difference
 gradients to reference values, and rate of change of temperature or pressure
 
 - In this study no mean offset was necessary to account for persistent pressure
@@ -505,47 +491,6 @@ errors due to rapid water temperature changes. This is likely because of the
 buffered $\Delta T_w$ relative to $\Delta T_a$. In setting where rapid changes
 in water temperature are possible calibration should consider including a
 persistent impact.
-# References
-
-
-
-\appendix
-\section{Here is a sample appendix}
-
-Optional Appendix goes here
-
-Optional Glossary, Notation or Acronym section goes here:
-
-Glossary is only allowed in Reviews of Geophysics
-
-\begin{glossary}
-\term{Term}
- Term Definition here
-\term{Term}
- Term Definition here
-\term{Term}
- Term Definition here
-\end{glossary}
-
-
-\begin{acronyms}
-\acro{Acronym}
- Definition here
-\acro{EMOS}
- Ensemble model output statistics
-\acro{ECMWF}
- Centre for Medium-Range Weather Forecasts
-\end{acronyms}
-
-\begin{notation}
-\notation{$a+b$} Notation Definition here
-\notation{$e=mc^2$}
-Equation in German-born physicist Albert Einstein's theory of special
-relativity that showed that the increased relativistic mass ($m$) of a
-body comes from the energy of motion of the body—that is, its kinetic
-energy ($E$)—divided by the speed of light squared ($c^2$).
-\end{notation}
-
 
 \acknowledgments
 The acknowledgments must list:
@@ -563,3 +508,69 @@ interest with respect to the results of this paper.
 It is also the appropriate place to thank colleagues and other contributors.
 
 AGU does not normally allow dedications. 
+
+# References
+
+\begin{notation}
+\notation{$a+b$} Notation Definition here
+\notation{$e=mc^2$}
+Equation in German-born physicist Albert Einstein's theory of special
+relativity that showed that the increased relativistic mass ($m$) of a
+body comes from the energy of motion of the body—that is, its kinetic
+energy ($E$)—divided by the speed of light squared ($c^2$).
+\end{notation}
+
+<!-- Or section title might be a descriptive heading about the results -->
+
+<!-- Enter Figures and Tables near as possible to where they are first mentioned: -->
+<!-- DO NOT USE \\psfrag or \\subfigure commands. -->
+<!-- DO NOT USE \\newcommand, \\renewcommand, or \\def, etc. -->
+
+<!-- ```{r} -->
+<!-- plot(pressure) -->
+<!-- ``` -->
+
+<!-- Example table -->
+
+<!-- \begin{table} -->
+<!--  \caption{Time of the Transition Between Phase 1 and Phase 2$^{a}$} -->
+<!--  \centering -->
+<!--  \begin{tabular}{l c} -->
+<!--  \hline -->
+<!--   Run  & Time (min)  \\ -->
+<!--  \hline -->
+<!--    $l1$  & 260   \\ -->
+<!--    $l2$  & 300   \\ -->
+<!--    $l3$  & 340   \\ -->
+<!--    $h1$  & 270   \\ -->
+<!--    $h2$  & 250   \\ -->
+<!--    $h3$  & 380   \\ -->
+<!--    $r1$  & 370   \\ -->
+<!--    $r2$  & 390   \\ -->
+<!--  \hline -->
+<!--  \multicolumn{2}{l}{$^{a}$Footnote text here.} -->
+<!--  \end{tabular} -->
+<!--  \end{table} -->
+
+<!-- AGU prefers the use of {sidewaystable} over {landscapetable} as it causes fewer problems. -->
+
+<!-- ```{r, fig.env = "sidewaysfigure"} -->
+<!-- plot(pressure) -->
+<!-- ``` -->
+
+<!-- \begin{sidewaystable} -->
+<!-- \caption{Caption here} -->
+<!-- \label{tab:signif_gap_clos} -->
+<!-- \begin{tabular}{ccc} -->
+<!-- one&two&three\\ -->
+<!-- four&five&six -->
+<!-- \end{tabular} -->
+<!-- \end{sidewaystable} -->
+
+<!-- If using numbered lines, please surround equations with \\begin{linenomath\*}... \\end{linenomath\*} -->
+
+<!-- \begin{linenomath*} -->
+<!-- \begin{equation} -->
+<!-- y|{f} \sim g(m, \sigma) -->
+<!-- \end{equation} -->
+<!-- \end{linenomath*} -->
