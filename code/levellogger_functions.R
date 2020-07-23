@@ -47,8 +47,8 @@ read_xle_data <-
 
     errors <- 
       data.table(instrument_type = c("LT_EDGE", "LT_EDGE_JR", "LT_Jr"),
-                 pressure_error_cm = c(0.1, 0.5, 0.5),
-                 temperature_error_c = c(0.05, 0.1, 0.1))
+                 pressure_error_cm = c(0.1, 0.5, 0.5) / qnorm(0.99),
+                 temperature_error_c = c(0.05, 0.1, 0.1) / qnorm(0.99))
     
     meta_dat <- 
       meta_dat[errors, 
@@ -98,13 +98,27 @@ align_loggers <-
 
 get_metadata <- 
   function(...){
-    rbindlist(lapply(list(...), 
-                     function(x){unique(x[, .(serial_number, instrument_type, 
-                                              model_number, firmware, 
-                                              software_version, logger_start, 
-                                              logger_stop, n_records, 
-                                              pressure_error_cm, temperature_error_c)])}))
+    dat <- 
+      rbindlist(lapply(list(...), 
+                       function(x){
+                         unique(x[, .(serial_number, 
+                                      instrument_type, 
+                                      model_number, 
+                                      firmware, 
+                                      software_version, 
+                                      logger_start, 
+                                      logger_stop, 
+                                      n_records, 
+                                      pressure_error_cm = pressure_error_cm, 
+                                      temperature_error_c = temperature_error_c)])}))
     
+    resolutions <- 
+      data.table(instrument_type = c("LT_EDGE", "LT_EDGE_JR", "LT_Jr"),
+                 pressure_resolution_cm = c(0.00012, 0.14, 0.14),
+                 temperature_resolution_cm = c(0.003, 0.1, 0.1))
+    
+    dat[resolutions,
+        on = "instrument_type"]
   }
 
 merge_pressures <- 
@@ -420,6 +434,28 @@ error_range <-
     2*errors(error.x + error.y)
   }
 
+combine_errors <- 
+  function(error.x, error.y){
+    
+    stopifnot(length(error.x) == length(error.y))
+    
+    df <- 
+      data.frame(x = 0,
+                 error.x = error.x,
+                 y = 0, 
+                 error.y = error.y)
+    
+    error.x <- 
+      set_errors(df$x, 
+                 df$error.x)
+    
+    error.y <- 
+      set_errors(df$y, 
+                 df$error.y)
+    
+    errors(error.x + error.y)
+  }
+
 model_changepoints <- 
   function(data, ...){
     set.seed(1234)
@@ -539,18 +575,21 @@ slp <-
 
 # Calculate alignments between experiments
 calculate_alignments <- 
-  function(data, full_data, experiment){
-    vardis_dat <- 
-      full_data[experiment == "var-dis"]
+  function(data, full.data, reference.experiment, x, y = "raw_logger_error_cm", by = "serial_number"){
+    reference_dat <- 
+      copy(full.data[experiment == reference.experiment])
+    
+    reference_dat[["x2"]] <- 
+      reference_dat[[x]]
     
     temp_ranges <- 
-      data[,.(min_temp = 0.95 * min(air_temperature_c), 
-              max_temp = 1.05 * max(air_temperature_c)),
-           by = .(serial_number)]
+      data[,.(min_x = 0.95 * min(.SD[[x]]), 
+              max_x = 1.05 * max(.SD[[x]])),
+           by = by]
     
     merged_data <- 
-      vardis_dat[temp_ranges, 
-                 on = c("serial_number", "air_temp2>=min_temp", "air_temp2<=max_temp")]
+      reference_dat[temp_ranges, 
+                 on = c(by, "x2>=min_x", "x2<=max_x")]
     
-    merged_data[,.(alignment_offset_cm = mean(raw_logger_error_cm)), by = .(serial_number)]
+    merged_data[,.(alignment_offset_cm = mean(.SD[[y]])), by = by]
   }
