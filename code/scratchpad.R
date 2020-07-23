@@ -19,6 +19,7 @@ pale_pal <-
     red = "#9B5249")
 
 f3311 <- mesonet_response[station == "F3311"]
+f3311[, ex_pressure_error_cm := 2.7625 / qnorm(0.99)]
 kcmx <- mesonet_response[station == "KCMX"]
 
 
@@ -49,14 +50,14 @@ water_dat[levellogger_measurements,
 # lm(ex_sea_level_pressure_cm ~ slp(ex_abs_pressure_cm, ex_air_temperature_c, elevation_cm/100), data = f3311)
 water_dat[, raw_logger_error_cm := dens_water_pressure_cm - (water_depth_cm + ex_sea_level_pressure_cm) + 22500/826]
 
-water_dat[, error_range_cm := error_range(pressure_error_cm, rep(2.7625, nrow(.SD)))]
+water_dat[, error_range_cm := error_range(pressure_error_cm, ex_pressure_error_cm)]
 water_dat[, elapsed_s := as.numeric(sample_time - min(sample_time)), 
          by = .(serial_number)]
 
 
 # Figure 1
 fig_1 <- 
-  ggplot(water_dat[experiment == "test-dat" & serial_number == "1062534", 
+  ggplot(water_dat[experiment == "test-dat" & serial_number == "1062520", 
                    .(sample_time, 
                      temperature_difference_c, 
                      water_temperature_c,
@@ -65,11 +66,14 @@ fig_1 <-
                    by = .(serial_number)][order(sample_time)],
          aes(y = raw_logger_error_cm,
              x = water_temperature_c)) + 
-  geom_ribbon(aes(ymin = -error_range_cm/2,
-                  ymax = error_range_cm/2),
-              fill = "gray80") +
+  geom_hline(aes(yintercept = -error_range_cm/2),
+             linetype = "dashed",
+             color = "gray30") +
+  geom_hline(aes(yintercept = error_range_cm/2),
+             linetype = "dashed",
+             color = "gray30") +
   geom_path(aes(color = temperature_difference_c)) +
-  geom_point(data = water_dat[experiment == "test-dat" & serial_number == "1062534", 
+  geom_point(data = water_dat[experiment == "test-dat" & serial_number == "1062520", 
                               .(sample_time, 
                                 temperature_difference_c, 
                                 water_temperature_c,
@@ -79,7 +83,7 @@ fig_1 <-
   scale_color_gradientn(colors = blue_orange_scale) + 
   theme(legend.position = "bottom")
 
-# ggsave("output/figures/figure_1.png", fig_1)
+ggsave("output/figures/figure_1.png", fig_1)
 
 water_training <- 
   water_dat[experiment != "test-dat"]
@@ -99,28 +103,13 @@ ggplot(water_training,
 
 water_training[, temp_diff2 := temperature_difference_c]
 
-calculate_water_alignments <- 
-  function(data, full_data, experiment, driver){
-    vardis_dat <- 
-      full_data[experiment == "stat-sim"]
-    
-    temp_ranges <- 
-      data[,.(min_temp = 0.95 * min(temperature_difference_c), 
-              max_temp = 1.05 * max(temperature_difference_c)),
-           by = .(serial_number)]
-    
-    merged_data <- 
-      vardis_dat[temp_ranges, 
-                 on = c("serial_number", "temp_diff2>=min_temp", "temp_diff2<=max_temp")]
-    
-    merged_data[,.(alignment_offset_cm = mean(raw_logger_error_cm)), by = .(serial_number)]
-  }
-
-
 statsim_means <- 
-  water_training[, 
-                 calculate_water_alignments(.SD, water_training, "stat-sim"),
-                by = .(experiment)]
+  water_training[, calculate_alignments(data = .SD, 
+                                        full.data = water_training, 
+                                        reference.experiment = "stat-sim", 
+                                        x = "temperature_difference_c", 
+                                        y = "raw_logger_error_cm"),
+                 by = .(experiment)]
 
 water_training[, experimental_mean := mean(raw_logger_error_cm),
               by = .(serial_number, experiment)]
@@ -162,7 +151,7 @@ fig_3 <-
              as.table = FALSE,
              strip.position = "bottom") +
   geom_text(data = data.frame(x = c(-10, 8.5),
-                              y = c(0.95, 0.95),
+                              y = c(-1.5, -1.5),
                               label = c("A", "B"),
                               driver = c("temperature_difference_c", "water_temperature_c")),
             aes(x = x, y = y, label = label)) +
@@ -400,10 +389,6 @@ ggplot(water_testing,
 
 
 # Baro Correction ---------------------------------------------------------
-Logger error = dens_air_pressure_cm - ex_abs_pressure_cm
-Tdiff model with only var-sim, var-dis and abs_temp_diff > 5
-Temperature model with only var-sim & var-dis
-
 
 # Calculate sea level pressure
 # Apply density correction
@@ -476,7 +461,11 @@ baro_training[, air_temp2 := air_temperature_c]
 
 vardis_means <- 
   baro_training[, 
-                calculate_alignments(.SD, baro_training, "var-dis"),
+                calculate_alignments(data = .SD, 
+                                     full.data = baro_training, 
+                                     reference.experiment = "var-dis",
+                                     x = "air_temperature_c",
+                                     y = "raw_logger_error_cm"),
                 by = .(experiment)]
 
 baro_training[, experimental_mean := mean(raw_logger_error_cm),
@@ -603,7 +592,7 @@ baro_training[baro_delta_t_models,
              delta_t_adjustment := slope * (delta_t_c_min - x_intercept) - intercept,
              on = "serial_number"]
 
-baro_training[abs(delta_t_c_min) <= 0.05, delta_t_adjustment := 0]
+baro_training[abs(delta_t_c_min) <= 0.1, delta_t_adjustment := 0]
 
 baro_training[,cum_delta_t_adjustment := cumsum(delta_t_adjustment),
              by = .(experiment, serial_number)]
@@ -1008,7 +997,7 @@ combined[baro_delta_t_models,
              delta_t_adjustment := slope * (delta_at_c_min - x_intercept) - intercept,
              on = c(baro_sn = "serial_number")]
 
-combined[abs(delta_at_c_min) <= 0.05, delta_t_adjustment := 0]
+combined[abs(delta_at_c_min) <= 0.01, delta_t_adjustment := 0]
 
 combined[, cum_delta_t_adjustment := cumsum(delta_t_adjustment),
              by = .(baro_sn, water_sn, experiment)]
@@ -1051,6 +1040,22 @@ combined[water_deltat_models,
          on = c(water_sn = "serial_number")]
 
 
+# combined[, tdiff_wt_adjustment := NULL]
+# 
+# combined[water_tdiff_models,
+#          tdiff_wt_adjustment := slope * (delta_at_c_min - x_intercept) - intercept,
+#          on = c(water_sn = "serial_number")]
+# 
+# combined[abs(delta_at_c_min) <= 0.05, tdiff_wt_adjustment := 0]
+# 
+# combined[, cum_tdiff_wt_adjustment := cumsum(tdiff_wt_adjustment),
+#          by = .(baro_sn, water_sn, experiment)]
+# 
+# ggplot(combined[experiment == "test-dat"], 
+#        aes(x = sample_time,
+#            y = cum_tdiff_wt_adjustment)) + 
+#   geom_line(stat = "summary",
+#             fun = "mean")
 
 # combined[, `:=`(ex_rect_wl_slp_rect_air_cm = ex_rect_water_pressure_cm - slp_air_pressure_cm,
 #                 ex_rect_wl_ex_air_cm = ex_rect_water_pressure_cm - ex_sea_level_pressure_cm,
@@ -1074,7 +1079,7 @@ combined[, `:=`(raw_water_level_cm = raw_water_pressure_cm - raw_air_pressure_cm
                 # cumsum(delta_at) adjustment (just subtracing cum_delta_t_adjustment)
                 # from the rectified water level helps. Need to find some one to
                 # combined the water_tdiff and the baro_deltat models
-                rect_water_level_cm = rect_water_pressure_cm - cum_delta_t_adjustment - rect_slp_cm,
+                rect_water_level_cm = rect_water_pressure_cm - rect_slp_cm,
                 ex_raw_water_level_cm = raw_water_pressure_cm - ex_sea_level_pressure_cm,
                 ex_rect_water_level_cm = ex_rect_water_pressure_cm - ex_sea_level_pressure_cm)]
 combined[, `:=`(raw_offset_cm = mean(raw_water_level_cm - water_depth_cm),
@@ -1141,244 +1146,248 @@ abline(h = 0.1)
 # DATA. ERROR IN BARO MODELS PRECLUDE ACCURATE CORRECTION OF WATER MODELS. BUT
 # USING THE RECTIFIED AIR PRESSURE AND THE MOST STABLE EXPERIMENTS MAY BE ENOUGH
 
-comp_dat <- merge(raw_water_data[, .(water_sn = serial_number, sample_time, raw_water_pressure_cm = water_pressure_cm, dens_water_pressure_cm = 1000 * water_pressure_cm / water_density(water_temperature_c), water_temperature_c, water_error_cm = pressure_error_cm)],
-                  baro,
-                  allow.cartesian = TRUE,
-                  by = "sample_time") %>% 
+raw_baro_data <- 
+  raw
+
+comp_dat <- 
+  merge(raw_water_data[, .(water_sn = serial_number, sample_time, raw_water_pressure_cm = water_pressure_cm, dens_water_pressure_cm = 1000 * water_pressure_cm / water_density(water_temperature_c), water_temperature_c, water_error_cm = pressure_error_cm)],
+        raw_baro_data[, .(baro_sn = serial_number, sample_time, raw_air_pressure_cm = air_pressure_cm, dens_air_pressure_cm = 1000 * air_pressure_cm / water_density(air_temperature_c), air_temperature_c, air_error_cm = pressure_error_cm)],
+        allow.cartesian = TRUE,
+        by = "sample_time") %>% 
+  .[, `:=`(delta_wt_c_min = c(NA_real_, diff(water_temperature_c)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins"))),
+           delta_at_c_min = c(NA_real_, diff(air_temperature_c)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins")))),
+    by = .(water_sn, baro_sn)]  %>% 
   set_experiments("data/experimental_design.csv")
 
-comp_dat[, error_range_cm := error_range(water_error_cm, baro_error_cm)]
+comp_dat[, instrument_error_cm := combine_errors(water_error_cm, air_error_cm)]
 
-# Align barologgers
-comp_dat[baro_offsets,
-         rect_air_pressure_cm := rect_air_pressure_cm - rect_offset_cm,
-         on = c(baro_sn = "serial_number", "experiment")]
+# # Align barologgers
+# baro_offsets <- 
+#   baro_dat[, .(raw_offset_cm = mean(dens_air_pressure_cm - ex_abs_pressure_cm)), 
+#            by = .(serial_number, experiment)]
+# 
+# comp_dat[baro_offsets,
+#          dens_air_pressure_cm := dens_air_pressure_cm - raw_offset_cm,
+#          on = c(baro_sn = "serial_number", "experiment")]
+
+# comp_dat[baro_offsets,
+#          rect_air_pressure_cm := rect_air_pressure_cm - rect_offset_cm,
+#          on = c(baro_sn = "serial_number", "experiment")]
 
 comp_dat[, `:=`(temperature_difference_c = air_temperature_c - water_temperature_c, 
                 abs_temperature_difference_c = abs(air_temperature_c - water_temperature_c),
                 slp_dens_water_pressure_cm = slp(dens_water_pressure_cm, water_temperature_c),
-                slp_rect_air_pressure_cm = slp(rect_air_pressure_cm, air_temperature_c))]
+                # slp_rect_air_pressure_cm = slp(rect_air_pressure_cm, air_temperature_c),
+                slp_dens_air_pressure_cm = slp(dens_air_pressure_cm, air_temperature_c))]
 
 comp_dat[levellogger_measurements, 
           water_depth_cm := water_depth_cm, 
           on = c(water_sn = "serial_number")]
 
+# Calculate Raw Water Level
+comp_dat[, raw_water_level_cm := dens_water_pressure_cm - dens_air_pressure_cm]
 
 # Calculate Raw Error
-comp_dat[, error_cm := slp_dens_water_pressure_cm - (water_depth_cm + slp_rect_air_pressure_cm)]
-# comp_dat[, error_cm := error_cm - mean(error_cm), by = .(water_sn)]
+comp_dat[, raw_error_cm := raw_water_level_cm - water_depth_cm]
 
 combined_training <- 
   comp_dat[experiment != "test-dat"]
 
-combined_testing <- 
+combined_testing <-
   comp_dat[experiment == "test-dat"]
 
-ggplot(combined_training,
+# It looks like 1065861 is more sensitive to noise than 1066019. This means if
+# I pull out the noisy periods with some criteria about delta AT then I can 
+# probably do the compensations without any reference data apart from manual
+# measurements
+ggplot(combined_training[abs(delta_at_c_min) < 0.1 & baro_sn == "1065861"],
+         aes(x = temperature_difference_c, 
+             y = raw_error_cm)) + 
+    geom_point(aes(color = sample_time <= as.POSIXct("2020-06-11 12:00", tz = "EST5EDT"))) +
+    facet_wrap(~water_sn, scales = "free")
+
+# combined_training <- 
+#   combined_training[baro_sn == "1066019"]
+
+ggplot(combined_training[abs(delta_at_c_min) > 0.1],
        aes(color = experiment, 
-           y = error_cm,
-           x = water_temperature_c)) + 
+           y = raw_error_cm,
+           x = delta_at_c_min)) + 
   geom_point() +
   geom_smooth(se = FALSE, method = "lm", color = "black", formula = y~x) +
+  geom_smooth(data = combined_training[abs(delta_at_c_min) > 0],
+              se = FALSE, method = "lm", color = "black", linetype = "dashed", formula = y~x) +
   facet_wrap(~water_sn, scales = "free")
 
-# Need to add a dummy column becuase the non-equi join replaces the joined column
-# with two columns (one each for min and max)
-combined_training[, temp_diff2 := temperature_difference_c]
-
-vardis_means_water_tdiff <- 
-  combined_training[, 
-                .(vardis_mean = combined_training[experiment == "var-dis"][
-                  .SD[,.(min_temp = 0.90 * min(temperature_difference_c), 
-                         max_temp = 1.10 * max(temperature_difference_c))],
-                  on = c("temp_diff2>=min_temp", "temp_diff2<=max_temp")][, 
-                                                                        mean(error_cm)]),
-                by = .(water_sn, experiment)]
-
-combined_training[, experimental_mean := mean(error_cm),
-              by = .(water_sn, experiment)]
-
-combined_training[vardis_means_water_tdiff, 
-                  vardis_mean := vardis_mean, 
-                  on = c("water_sn", "experiment")]
-
-combined_training[, experimental_error := experimental_mean - vardis_mean]
-
-
-ggplot(combined_training,
-       aes(x = temperature_difference_c, 
-           y = error_cm)) + 
-  # geom_point(aes(color = experiment)) +
-  geom_point(aes(y = error_cm - experimental_error,
-                 color = baro_sn),
-             # color = "black",
-             shape = 21) +
-  geom_smooth(aes(y = error_cm - experimental_error),
-              method = "lm", se = FALSE) +
-  facet_wrap(~water_sn, scales = "free")
-
-combined_training[, error_cm := error_cm - experimental_error]
-
-
-
-ggplot(combined_training,
-       aes(color = experiment, 
-           y = error_cm,
-           x = water_temperature_c)) + 
-  geom_point() + 
-  geom_smooth(method = "lm", se = FALSE, color = "black")+ 
-  facet_wrap(~water_sn, scales = "free")
-
-ggplot(combined_training,
-       aes(color = experiment, 
-           y = error_cm,
-           x = temperature_difference_c)) + 
-  geom_point() + 
-  facet_wrap(~water_sn, scales = "free")
-
-
-# Tdiff Models
-
-tdiff_models <- 
-  fit_correction_mod(combined_training[experiment == "stat-dis"],
-                     x = "temperature_difference_c",
-                     y = "error_cm",
-                     by = "water_sn")
+full_dat_mods <- 
+  fit_correction_mod(combined_training,
+                     "delta_at_c_min",
+                     "raw_error_cm",
+                     by = c("water_sn", "baro_sn"))
 
 combined_training <- 
-  correction_residuals(tdiff_models,
+  correction_residuals(full_dat_mods, 
                        combined_training,
-                       x = "temperature_difference_c",
-                       y = "error_cm",
-                       by = "water_sn")
+                       "delta_at_c_min", 
+                       "raw_error_cm", 
+                       by = c("water_sn", "baro_sn"))
+
+setnames(combined_training, "residuals", "dat_resid")
 
 ggplot(combined_training,
-       aes(y = residuals,
-           x = temperature_difference_c,
-           color = experiment)) + 
-  geom_point() + 
-  facet_wrap(~water_sn,
-             scale = "free")
-
-ggplot(combined_training,
-       aes(y = residuals,
-           x = water_temperature_c,
+       aes(x = air_temperature_c, 
+           y = dat_resid,
            color = baro_sn)) + 
-  geom_point() + 
-  facet_wrap(~water_sn,
-             scale = "free")
+  geom_point() +
+  facet_wrap(~water_sn, scales = "free")
 
-combined_training[tdiff_models, 
-                  tdiff_dens_water_pressure_cm := dens_water_pressure_cm - slope * (temperature_difference_c - x_intercept),
-                  on = "water_sn"]
-
-combined_training[, 
-                  tdiff_dens_error_cm := tdiff_dens_water_pressure_cm - (water_depth_cm + rect_air_pressure_cm)]
-
-
-ggplot(combined_training,
-       aes(y = tdiff_dens_error_cm,
-           x = water_temperature_c)) + 
-  geom_point(aes(color = experiment)) + 
-  geom_smooth(data = combined_training[experiment %in% c("var-dis", "var-sim")],
-              method = "lm",
-              se = FALSE) +
-  facet_wrap(~water_sn,
-             scale = "free")
-
-# Temp Models
-
-temp_models <- 
-  fit_correction_mod(combined_training[experiment %in% c("var-sim")],
-                     x = "water_temperature_c", 
-                     y = "tdiff_dens_error_cm",
-                     by = "water_sn")
+full_dwt_mods <- 
+  fit_correction_mod(combined_training,
+                     "delta_wt_c_min",
+                     "dat_resid",
+                     by = c("water_sn", "baro_sn"))
 
 combined_training <- 
-  correction_residuals(temp_models,
+  correction_residuals(full_dwt_mods, 
                        combined_training,
-                       x = "water_temperature_c",
-                       y = "tdiff_dens_error_cm",
-                       by = "water_sn")
+                       "delta_wt_c_min", 
+                       "dat_resid", 
+                       by = c("water_sn", "baro_sn"))
+
+setnames(combined_training, "residuals", "dwt_resid")
 
 ggplot(combined_training,
-       aes(y = residuals,
-           x = water_temperature_c,
-           color = experiment)) + 
-  geom_point() + 
-  facet_wrap(~water_sn,
-             scale = "free")
+       aes(x = air_temperature_c, 
+           y = dwt_resid,
+           color = baro_sn)) + 
+  geom_point() +
+  facet_wrap(~water_sn, scales = "free")
+
+# combined_training[experiment == "var-dis", 
+#                   `:=`(water_temp_mean = mean(water_temperature_c),
+#                        water_temp_sd = sd(water_temperature_c)),
+#                   by = .(water_sn, baro_sn)]
+# combined_training[experiment == "var-dis", 
+#                   `:=`(water_temp_lwr = water_temp_mean - water_temp_sd,
+#                        water_temp_upr = water_temp_mean + water_temp_sd)]
+
+ggplot(combined_training[experiment == "var-dis"],
+       aes(x = air_temperature_c,
+           y = dwt_resid,
+           color = between(water_temperature_c, water_temp_lwr, water_temp_upr))) +
+  geom_point() +
+  facet_wrap(~water_sn, scales = "free")
+
+full_at_mods <-
+  fit_correction_mod(combined_training[experiment == "var-dis"],
+                     "air_temperature_c",
+                     "dwt_resid",
+                     by = c("water_sn", "baro_sn"))
+
+combined_training <-
+  correction_residuals(full_at_mods,
+                       combined_training,
+                       "air_temperature_c",
+                       "dwt_resid",
+                       by = c("water_sn", "baro_sn"))
+ 
+setnames(combined_training, "residuals", "at_resid")
+
+full_wt_mods <-
+  fit_correction_mod(combined_training[experiment %in% c("var-sim")],
+                     "water_temperature_c",
+                     "at_resid",
+                     by = c("water_sn", "baro_sn"))
+
+combined_training <- correction_residuals(full_wt_mods,
+                                          combined_training,
+                                          "water_temperature_c",
+                                          "at_resid",
+                                          by = c("water_sn", "baro_sn"))
+
+setnames(combined_training, "residuals", "wt_resid")
 
 ggplot(combined_training,
-       aes(y = residuals,
-           x = temperature_difference_c,
-           color = experiment)) + 
-  geom_point() + 
-  facet_wrap(~water_sn,
-             scale = "free")
+       aes(x = temperature_difference_c,
+           y = wt_resid,
+           color = experiment)) +
+  geom_point() +
+  facet_wrap(~water_sn, scales = "free")
 
-combined_training[temp_models, 
-                  temp_tdiff_dens_water_pressure_cm := tdiff_dens_water_pressure_cm - slope * (water_temperature_c - x_intercept),
-                  on = "water_sn"]
+# Compensate
 
-combined_training[, 
-                  temp_tdiff_dens_error_cm := temp_tdiff_dens_water_pressure_cm - (water_depth_cm + rect_air_pressure_cm)]
+combined_training[, rect_water_level_cm := raw_water_level_cm]
 
-ggplot(combined_training,
-       aes(y = temp_tdiff_dens_error_cm,
-           x = temperature_difference_c,
-           color = experiment)) + 
-  geom_point() + 
-  facet_wrap(~water_sn,
-             scales = "free")
+combined_training[full_dat_mods,
+                  rect_water_level_cm := rect_water_level_cm - slope * (delta_at_c_min - x_intercept),
+                  on = c("water_sn", "baro_sn")]
+
+combined_training[full_dwt_mods,
+                  rect_water_level_cm := rect_water_level_cm - slope * (delta_wt_c_min - x_intercept),
+                  on = c("water_sn", "baro_sn")]
+
+combined_training[full_at_mods, 
+                  rect_water_level_cm := rect_water_level_cm - slope * (air_temperature_c - x_intercept),
+                  on = c("water_sn", "baro_sn")]
+
+combined_training[full_wt_mods, 
+                 rect_water_level_cm := rect_water_level_cm - slope * (water_temperature_c - x_intercept),
+                 on = c("water_sn", "baro_sn")]
 
 # Final Offset
-combined_training[, `:=`(rect_offset_cm = mean(temp_tdiff_dens_water_pressure_cm - rect_air_pressure_cm - water_depth_cm),
-                         raw_offset_cm = mean(raw_water_pressure_cm - raw_air_pressure_cm - water_depth_cm)), 
+combined_training[, `:=`(rect_offset_cm = mean(rect_water_level_cm - water_depth_cm),
+                         raw_offset_cm = mean(raw_water_level_cm - water_depth_cm)), 
                   by = .(water_sn, baro_sn, experiment)]
-combined_training[, `:=`(raw_water_level_cm = raw_water_pressure_cm - raw_air_pressure_cm - raw_offset_cm,
-                         rect_water_level_cm = temp_tdiff_dens_water_pressure_cm - rect_air_pressure_cm - rect_offset_cm)]
+combined_training[, `:=`(raw_water_level_cm = raw_water_level_cm - raw_offset_cm,
+                         rect_water_level_cm = rect_water_level_cm - rect_offset_cm)]
 
 ggplot(combined_training,
        aes(x = sample_time,
            color = baro_sn)) +
-  geom_ribbon(aes(ymin = water_depth_cm - error_range_cm / 2,
-                  ymax = water_depth_cm + error_range_cm / 2),
+  geom_ribbon(aes(ymin = water_depth_cm - instrument_error_cm * qnorm(0.99),
+                  ymax = water_depth_cm + instrument_error_cm * qnorm(0.99)),
               fill = "gray80",
               color = "gray80") +
   geom_line(aes(y = rect_water_level_cm)) +
-  geom_line(aes(y = raw_water_level_cm),
-  linetype = "dotted") +
+  # geom_line(aes(y = raw_water_level_cm),
+  # linetype = "dotted") +
   facet_wrap(~water_sn,
-             scales = "free")
+             scales = "free") +
+  ggtitle("td")
 
 # Test-dat
 
-# combined_testing[tdiff_models, 
-#                  rect_water_pressure_cm := slp(dens_water_pressure_cm, water_temperature_c) - slope * (temperature_difference_c - x_intercept),
-#                  on = "water_sn"]
+combined_testing[, rect_water_level_cm := raw_water_level_cm]
 
+combined_testing[full_dat_mods,
+                  rect_water_level_cm := rect_water_level_cm - slope * (delta_at_c_min - x_intercept),
+                  on = c("water_sn")]
 
-combined_testing[tdiff_models, 
-                 rect_water_pressure_cm := dens_water_pressure_cm - slope * (temperature_difference_c - x_intercept),
-                 on = "water_sn"]
+combined_testing[full_dwt_mods,
+                  rect_water_level_cm := rect_water_level_cm - slope * (delta_wt_c_min - x_intercept),
+                  on = c("water_sn")]
 
-combined_testing[temp_models, 
-                 rect_water_pressure_cm := rect_water_pressure_cm - slope * (water_temperature_c - x_intercept),
-                 on = "water_sn"]
+combined_testing[full_at_mods, 
+                  rect_water_level_cm := rect_water_level_cm - slope * (air_temperature_c - x_intercept),
+                  on = c("water_sn")]
 
+combined_testing[full_wt_mods, 
+                  rect_water_level_cm := rect_water_level_cm - slope * (water_temperature_c - x_intercept),
+                  on = c("water_sn")]
 
-combined_testing[, `:=`(rect_offset_cm = mean(rect_water_pressure_cm - slp_rect_air_pressure_cm - water_depth_cm),
-                        raw_offset_cm = mean(raw_water_pressure_cm - raw_air_pressure_cm - water_depth_cm)), 
-                 by = .(water_sn, baro_sn)]
-combined_testing[, `:=`(raw_water_level_cm = raw_water_pressure_cm - raw_air_pressure_cm - raw_offset_cm,
-                        rect_water_level_cm = rect_water_pressure_cm - slp_rect_air_pressure_cm - rect_offset_cm)]
+# Final Offset
+combined_testing[, `:=`(rect_offset_cm = mean(rect_water_level_cm - water_depth_cm),
+                         raw_offset_cm = mean(raw_water_level_cm - water_depth_cm)), 
+                  by = .(water_sn, baro_sn, experiment)]
+
+combined_testing[, `:=`(raw_water_level_cm = raw_water_level_cm - raw_offset_cm,
+                        rect_water_level_cm = rect_water_level_cm - rect_offset_cm)]
 
 ggplot(combined_testing,
        aes(x = sample_time,
            color = baro_sn)) +
-  geom_ribbon(aes(ymin = water_depth_cm - error_range_cm / 2,
-                  ymax = water_depth_cm + error_range_cm / 2),
+  geom_ribbon(aes(ymin = water_depth_cm - instrument_error_cm * qnorm(0.99),
+                  ymax = water_depth_cm + instrument_error_cm * qnorm(0.99)),
               fill = "gray80",
               color = "gray80") +
   geom_line(aes(y = water_depth_cm),
@@ -1386,11 +1395,10 @@ ggplot(combined_testing,
   geom_line(aes(y = rect_water_level_cm)) +
   geom_line(aes(y = raw_water_level_cm),
             linetype = "dotted") +
-  # geom_line(aes(y = slp_water_level_cm),
-  #           linetype = "dashed") + 
-  facet_wrap(~water_sn)
+  facet_wrap(~water_sn,
+             scales = "free")
 
-# Apply to combined to compare with external baro
+# Apply to combined to compare with external baro compensations
 
 combined[, temperature_difference_c := air_temperature_c - water_temperature_c]
 
@@ -1425,8 +1433,8 @@ ggplot(combined[experiment == "test-dat"],
 
 # Compare Performance
 error_percentage <- 
-  combined_testing[, .(raw = 100 * sum(!between(water_level_cm, water_depth_cm - error_range_cm / 2, water_depth_cm + error_range_cm / 2))/.N,
-                       rectified = 100 * sum(!between(rect_water_level_cm, water_depth_cm - error_range_cm / 2, water_depth_cm + error_range_cm / 2))/.N),
+  combined_testing[, .(raw = 100 * sum(!between(raw_water_level_cm, water_depth_cm - instrument_error_cm * qnorm(0.99), water_depth_cm + instrument_error_cm * qnorm(0.99)))/.N,
+                       rectified = 100 * sum(!between(rect_water_level_cm, water_depth_cm - instrument_error_cm * qnorm(0.99), water_depth_cm + instrument_error_cm * qnorm(0.99)))/.N),
                    by = .(water_sn, baro_sn)]
 
 library(ggridges)
@@ -1449,3 +1457,16 @@ ggplot(error_percentage[order(baro_sn, water_sn)],
   facet_wrap(~baro_sn) +
   theme_bw() +
   theme(axis.text.x.bottom = element_text(angle = 45, hjust = 1))
+
+combined_mad <- 
+  combined_testing[, .(raw = median(abs(raw_water_level_cm - water_depth_cm)),
+                       rectified = median(abs(rect_water_level_cm - water_depth_cm)),
+                       raw_pct = 100 * median(abs(raw_water_level_cm - water_depth_cm))/mean(water_depth_cm),
+                       rectified_pct = 100 * median(abs(rect_water_level_cm - water_depth_cm))/mean(water_depth_cm)),
+                   by = .(water_sn, baro_sn)]
+
+boxplot(value ~ variable, 
+        data = melt(combined_mad, id.vars = c("water_sn", "baro_sn"), measure.vars = c("raw", "rectified")))
+
+boxplot(value ~ variable, 
+        data = melt(combined_mad, id.vars = c("water_sn", "baro_sn"), measure.vars = c("raw_pct", "rectified_pct")))
