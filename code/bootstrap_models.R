@@ -42,7 +42,7 @@ dat <-
 
 lambdas <- 
   {set.seed(1234)
-    lapply(split(training_data, by = "baro_sn"), 
+    lapply(split(training_data, by = c("water_sn", "baro_sn")), 
            function(x){vapply(1:100, 
                               function(y){cv.glmnet(y = x$raw_error_cm, 
                                                     x = as.matrix(x[, .(air_temperature_c, water_temperature_c, delta_at_c_min)]), 
@@ -51,7 +51,10 @@ lambdas <-
                               FUN.VALUE = numeric(1))})}
 
 opt_lambdas <- 
-  vapply(lambdas, median, numeric(1), USE.NAMES = TRUE)
+  vapply(lambdas, mean, numeric(1), USE.NAMES = TRUE)
+
+names(opt_lambdas) <- 
+  sub("\\.", "_", names(opt_lambdas))
 
 # bigmods <- 
 #   cv.glmnet(y = training_data$raw_error_cm, 
@@ -81,7 +84,7 @@ mods <-
                paste(wsn, bsn, sep = "_")
              
              opt_lambda <- 
-               opt_lambdas[["bsn"]]
+               opt_lambdas[[model_id]]
              
              nobs <- 
                nrow(x)
@@ -364,6 +367,9 @@ drake::loadd(compensated_data)
 testing_data <- 
   compensated_data[experiment != "test-dat"]
 
+testing_data[, delta_at_error_c_min := combine_errors(100 * air_temp_error_c, 100 * air_temp_error_c)]
+testing_data[, delta_at_c_min := 100 * delta_at_c_min]
+
 testing_mat <- 
   testing_data[, .(S = list(matrix(sample_time, 
                                    dimnames = list(NULL, "sample_time"),
@@ -402,6 +408,10 @@ predictors[testing_data[, .(nobs = .N), by = .(water_sn, baro_sn)],
 setnames(predictors, 
          c("(Intercept)", "rep"),
          c("intercept", "replication"))
+
+predictors[, `:=`(air_temperature_c = nafill(air_temperature_c, "const", 0),
+                  water_temperature_c = nafill(water_temperature_c, "const", 0),
+                  delta_at_c_min = nafill(delta_at_c_min, "const", 0))]
 
 pred_mat <- 
   predictors[, .(intercept = list(matrix(rep(intercept, nobs),
@@ -487,6 +497,9 @@ for(i in unique(test_pred$water_sn)){
   }
 }
 
+fwrite(predictions, 
+       "output/tabular/boostrap_prediction_values.csv")
+
 # posterior_pred <-
 #   disk.frame("output/tabular/bootstrap_predictions_test_data.df")
 # 
@@ -565,7 +578,8 @@ predictions[, `:=`(raw_ooir = !between(raw_water_level_cm,
                                        water_depth_cm + (upper_bound_cm - predicted_error_cm)))]
 
 ooir_mod <- 
-  lm(value ~ variable*experiment,
+  glm(value ~ variable*experiment,
+      family = binomial,
      data = melt(predictions, id.vars = c("water_sn", "baro_sn", "sample_time", "experiment"),
                  measure.vars = c("raw_ooir", "rect_ooir")))
 
@@ -575,6 +589,9 @@ oor_summary <-
   predictions[, lapply(.SD, sum),
               by = .(water_sn, baro_sn, experiment),
               .SDcols = patterns("_oo")]
+
+oor_summary[, lapply(.SD, sum), by = .(experiment), 
+            .SDcols = patterns("(w|t)_oo")]
 
 oor_summary[, `:=`(delta_ooir = rect_ooir - raw_ooir,
                    delta_oopr = rect_oopr - raw_oopr)]
@@ -595,15 +612,16 @@ hist(oor_summary$delta_ooir[oor_summary$rect_ooir != 0 & oor_summary$raw_ooir !=
 ggplot(data = predictions[experiment == "var-dis"],
        aes(x = sample_time,
            y = rect_water_level_cm)) +
-  # geom_ribbon(aes(ymin = water_depth_cm - (predicted_error_cm - lower_bound_cm),
-  #                 ymax = water_depth_cm + (upper_bound_cm - predicted_error_cm)),
-  #             fill = "gray20") + 
+  geom_ribbon(aes(ymin = water_depth_cm - (predicted_error_cm - lower_bound_cm),
+                  ymax = water_depth_cm + (upper_bound_cm - predicted_error_cm)),
+              fill = "gray20") +
   geom_ribbon(aes(ymin = water_depth_cm - (qnorm(0.975) * instrument_error_cm),
                   ymax = water_depth_cm + qnorm(0.975) * instrument_error_cm),
               fill = "gray80") + 
   geom_line(aes(color = baro_sn)) +
-  # geom_line(aes(y = raw_water_level_cm),
-  #           linetype = "dotted") +
+  geom_line(aes(y = raw_water_level_cm,
+                color = baro_sn),
+            linetype = "dotted") +
   geom_line(aes(y = water_depth_cm)) +
   facet_wrap(~ water_sn, scales = "free")
 
