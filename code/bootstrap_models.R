@@ -1,12 +1,10 @@
-#### SET SEED!!!!!!!
-
-
 library(data.table)
-library(fixest)
+library(glmnet)
 library(broom)
 library(errors)
 library(parallel)
 options(mc.cores = 4)
+set.seed(1234)
 
 drake::loadd(compensated_data)
 
@@ -35,23 +33,34 @@ combine_errors <-
 training_data <- 
   compensated_data[experiment == "test-dat"]
 
-training_data[, delta_at_error_c_min := combine_errors(air_temp_error_c, air_temp_error_c)]
+training_data[, delta_at_error_c_min := combine_errors(100 * air_temp_error_c, 100 * air_temp_error_c)]
+training_data[, delta_at_c_min := 100 * delta_at_c_min]
 
-# dat <- 
-#   split(training_data,
-#         by = c("water_sn", "baro_sn"))  
+dat <-
+  split(training_data,
+        by = c("water_sn", "baro_sn"))
 
-library(glmnet)
+lambdas <- 
+  {set.seed(1234)
+    lapply(split(training_data, by = "baro_sn"), 
+           function(x){vapply(1:100, 
+                              function(y){cv.glmnet(y = x$raw_error_cm, 
+                                                    x = as.matrix(x[, .(air_temperature_c, water_temperature_c, delta_at_c_min)]), 
+                                                    alpha = 1, 
+                                                    lambda = c(10^seq(3, -6, by = -.1), 0))$lambda.min}, 
+                              FUN.VALUE = numeric(1))})}
 
-set.seed(1234)
-bigmod <- 
-  cv.glmnet(y = training_data$raw_error_cm, 
-            x = as.matrix(training_data[, .(air_temperature_c, water_temperature_c, delta_at_c_min)]), 
-            alpha = 1, 
-            lambda = c(10^seq(3, -6, by = -.1), 0))
+opt_lambdas <- 
+  vapply(lambdas, median, numeric(1), USE.NAMES = TRUE)
 
-opt_lambda <- 
-  bigmod$lambda.min
+# bigmods <- 
+#   cv.glmnet(y = training_data$raw_error_cm, 
+#             x = as.matrix(training_data[, .(air_temperature_c, water_temperature_c, delta_at_c_min)]), 
+#             alpha = 1, 
+#             lambda = c(10^seq(3, -6, by = -.1), 0))
+# 
+# opt_lambda <- 
+#   bigmod$lambda.min
 
 mods <- 
   mclapply(dat, 
@@ -62,45 +71,71 @@ mods <-
              models <- 
                vector("list", 1000)
              
+             wsn <- 
+               unique(x$water_sn)
+             
+             bsn <- 
+               unique(x$baro_sn)
+             
+             model_id <- 
+               paste(wsn, bsn, sep = "_")
+             
+             opt_lambda <- 
+               opt_lambdas[["bsn"]]
+             
+             nobs <- 
+               nrow(x)
+             
              while(i < length(models) + 1){
                
-               wsn <- 
-                 unique(x$water_sn)
+               samples <- 
+                 sample.int(n = nobs, size = nobs, replace = TRUE)
                
-               bsn <- 
-                 unique(x$baro_sn)
+               inst_err <- 
+                 rnorm(nobs, 0, x$instrument_error_cm)
                
-               model_id <- 
-                 paste(wsn, bsn, sep = "_")
+               at_err <- 
+                 rnorm(nobs, 0, x$air_error_c)
                
-               nobs <- 
-                 nrow(x)
+               wt_err <- 
+                 rnorm(nobs, 0, x$water_error_c)
                
-               err <- 
-                 rnorm(nobs, x$raw_error_cm, x$instrument_error_cm)
+               d_at_err <- 
+                 rnorm(nobs, 0, x$delta_at_error_c_min)
                
-               at <- 
-                 rnorm(nobs, x$air_temperature_c, x$air_error_c)
+               Y<- 
+                 x$raw_error_cm[samples] + inst_err
                
-               wt <- 
-                 rnorm(nobs, x$water_temperature_c, x$water_error_c)
-               
-               d_at <- 
-                 rnorm(nobs, x$delta_at_c_min, x$delta_at_error_c_min)
-               
-               df <- 
-                 data.table(raw_error_cm = err,
-                            air_temperature_c = at,
-                            water_temperature_c = wt,
-                            delta_at_c_min = d_at)
+               X <- 
+                 matrix(c(air_temperature_c = x$air_temperature_c[samples] + at_err,
+                          water_temperature_c = x$water_temperature_c[samples] + wt_err,
+                          delta_at_c_min = x$delta_at_c_min[samples] + d_at_err),
+                        nrow = nobs,
+                        dimnames = list(NULL, 
+                                        c("air_temperature_c",
+                                          "water_temperature_c",
+                                          "delta_at_c_min")))
                
                mod <- 
-                 lm(raw_error_cm ~ air_temperature_c + water_temperature_c + delta_at_c_min,
-                    data = df)
+                 glmnet(x = X,
+                        y = Y,
+                        alpha = 1,
+                        lambda = opt_lambda)
+               
+               adj_r2 <- 
+                 1 - (1-cor(predict(mod, X, s = opt_lambda)[,1], Y)) * (nobs - 1) / (nobs - 3 - 1)
+                 
                
                models[[i]] <- 
-                 list(mod_summary = data.table(model_id, rep = i, tidy(mod)),
-                      mod_fit = data.table(model_id, rep = i, glance(mod)))
+                 list(mod_summary = data.table(model_id, 
+                                               rep = i, 
+                                               tidy(mod)),
+                      mod_fit = data.table(model_id, 
+                                           rep = i, 
+                                           sigma = sigma(mod), 
+                                           adj_r2,
+                                           nobs,
+                                           deviance = deviance(mod)))
                
                i <- i + 1
              }
@@ -310,9 +345,9 @@ ints[, .(pred_range = median(pred_upr - pred_lwr),
 
 # Testing Data ------------------------------------------------------------
 
-library(data.table)
+# library(data.table)
 library(fst)
-library(disk.frame)
+# library(disk.frame)
 setup_disk.frame(4)
 options(future.globals.maxSize = Inf)
 setDTthreads(2)
@@ -343,7 +378,7 @@ testing_mat <-
                    nobs = .N),
                by = .(water_sn, baro_sn)]
 
-model_summaries[, estimate := fifelse(p.value > 0.05, 0, estimate)]
+# model_summaries[, estimate := fifelse(p.value > 0.05, 0, estimate)]
 
 predictors <- 
   dcast(rbind(model_fits[, .(model_id, water_sn, baro_sn, rep, term = "sigma", estimate = sigma)], 
@@ -491,21 +526,30 @@ mad_values <-
        variable.name = "type", 
        value.name = "mad_cm")
 
+rmse_values <- 
+  melt(predictions[, lapply(.SD, function(x) sqrt(mean((x - water_depth_cm)^2))), 
+                   by = .(water_sn, baro_sn, experiment),
+                   .SDcols = c("raw_water_level_cm", "rect_water_level_cm")], 
+       id.vars = c("water_sn", "baro_sn", "experiment"),
+       measure.vars = c("raw_water_level_cm", "rect_water_level_cm"),
+       variable.name = "type", 
+       value.name = "rmse_cm")
+
 library(ggplot2)
 library(ggdist)
 library(emmeans)
 
-ggplot(mad_values,
+ggplot(rmse_values,
        aes(y = experiment,
-           x = mad_cm,
+           x = rmse_cm,
            fill = type)) + 
   stat_gradientinterval() +
   facet_wrap(~baro_sn)
 
-mad_mod <- 
-  lm(mad_cm ~ type*experiment, data = mad_values)
+rmse_mod <- 
+  lm(rmse_cm ~ type*experiment, data = rmse_values)
 
-emmeans(mad_mod, pairwise ~ type | experiment, adjust = "bonferroni")
+emmeans(rmse_mod, pairwise ~ type | experiment, adjust = "bonferroni")
 
 predictions[, `:=`(raw_ooir = !between(raw_water_level_cm, 
                                      water_depth_cm - qnorm(0.975) * instrument_error_cm,
