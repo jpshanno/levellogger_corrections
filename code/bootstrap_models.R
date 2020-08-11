@@ -33,8 +33,8 @@ combine_errors <-
 training_data <- 
   compensated_data[experiment == "test-dat"]
 
-training_data[, delta_at_error_c_min := combine_errors(100 * air_temp_error_c, 100 * air_temp_error_c)]
-training_data[, delta_at_c_min := 100 * delta_at_c_min]
+training_data[, delta_at_error_01c_min := combine_errors(100 * air_temp_error_c, 100 * air_temp_error_c)]
+training_data[, delta_at_01c_min := 100 * delta_at_c_min]
 
 dat <-
   split(training_data,
@@ -45,7 +45,7 @@ lambdas <-
     lapply(split(training_data, by = c("water_sn", "baro_sn")), 
            function(x){vapply(1:100, 
                               function(y){cv.glmnet(y = x$raw_error_cm, 
-                                                    x = as.matrix(x[, .(air_temperature_c, water_temperature_c, delta_at_c_min)]), 
+                                                    x = as.matrix(x[, .(air_temperature_c, water_temperature_c, delta_at_01c_min)]), 
                                                     alpha = 1, 
                                                     lambda = c(10^seq(3, -6, by = -.1), 0))$lambda.min}, 
                               FUN.VALUE = numeric(1))})}
@@ -58,7 +58,7 @@ names(opt_lambdas) <-
 
 # bigmods <- 
 #   cv.glmnet(y = training_data$raw_error_cm, 
-#             x = as.matrix(training_data[, .(air_temperature_c, water_temperature_c, delta_at_c_min)]), 
+#             x = as.matrix(training_data[, .(air_temperature_c, water_temperature_c, delta_at_01c_min)]), 
 #             alpha = 1, 
 #             lambda = c(10^seq(3, -6, by = -.1), 0))
 # 
@@ -104,7 +104,7 @@ mods <-
                  rnorm(nobs, 0, x$water_error_c)
                
                d_at_err <- 
-                 rnorm(nobs, 0, x$delta_at_error_c_min)
+                 rnorm(nobs, 0, x$delta_at_error_01c_min)
                
                Y<- 
                  x$raw_error_cm[samples] + inst_err
@@ -112,12 +112,12 @@ mods <-
                X <- 
                  matrix(c(air_temperature_c = x$air_temperature_c[samples] + at_err,
                           water_temperature_c = x$water_temperature_c[samples] + wt_err,
-                          delta_at_c_min = x$delta_at_c_min[samples] + d_at_err),
+                          delta_at_01c_min = x$delta_at_01c_min[samples] + d_at_err),
                         nrow = nobs,
                         dimnames = list(NULL, 
                                         c("air_temperature_c",
                                           "water_temperature_c",
-                                          "delta_at_c_min")))
+                                          "delta_at_01c_min")))
                
                mod <- 
                  glmnet(x = X,
@@ -130,10 +130,10 @@ mods <-
                  
                
                models[[i]] <- 
-                 list(mod_summary = data.table(model_id, 
+                 list(model_coefficients = data.table(model_id, 
                                                rep = i, 
                                                tidy(mod)),
-                      mod_fit = data.table(model_id, 
+                      model_measures = data.table(model_id, 
                                            rep = i, 
                                            sigma = sigma(mod), 
                                            adj_r2,
@@ -213,7 +213,7 @@ pred_mat <-
                                          ncol = 1)),
                  B = list(matrix(c(air_temperature_c,
                                    water_temperature_c,
-                                   delta_at_c_min),
+                                   delta_at_01c_min),
                                  dimnames = list(c("b_at",
                                                    "b_wt",
                                                    "b_dat"),
@@ -239,10 +239,10 @@ mod_mat <-
                                     ncol = 1)), 
                     X = list(matrix(c(air_temperature_c, 
                                       water_temperature_c, 
-                                      delta_at_c_min), 
+                                      delta_at_01c_min), 
                                     dimnames = list(NULL, c("air_temperature_c", 
                                                             "water_temperature_c", 
-                                                            "delta_at_c_min")),
+                                                            "delta_at_01c_min")),
                                     ncol = 3)),
                     nobs = .N),
                 by = .(water_sn, baro_sn)]
@@ -333,7 +333,7 @@ ggplot(data = ints[water_sn == "1033239"],
   facet_wrap(~baro_sn, scales = "free")
 
 mod <- 
-  lm(raw_error_cm ~ air_temperature_c + water_temperature_c + delta_at_c_min, 
+  lm(raw_error_cm ~ air_temperature_c + water_temperature_c + delta_at_01c_min, 
      data = split(training_data, by = c("water_sn", "baro_sn"))[[1]])
 
 ints[, .(pred_range = median(pred_upr - pred_lwr), 
@@ -367,8 +367,8 @@ drake::loadd(compensated_data)
 testing_data <- 
   compensated_data[experiment != "test-dat"]
 
-testing_data[, delta_at_error_c_min := combine_errors(100 * air_temp_error_c, 100 * air_temp_error_c)]
-testing_data[, delta_at_c_min := 100 * delta_at_c_min]
+testing_data[, delta_at_error_01c_min := combine_errors(100 * air_temp_error_c, 100 * air_temp_error_c)]
+testing_data[, delta_at_01c_min := 100 * delta_at_c_min]
 
 testing_mat <- 
   testing_data[, .(S = list(matrix(sample_time, 
@@ -376,10 +376,10 @@ testing_mat <-
                                    ncol = 1)), 
                    X = list(matrix(c(air_temperature_c, 
                                      water_temperature_c, 
-                                     delta_at_c_min), 
+                                     delta_at_01c_min), 
                                    dimnames = list(NULL, c("air_temperature_c", 
                                                            "water_temperature_c", 
-                                                           "delta_at_c_min")),
+                                                           "delta_at_01c_min")),
                                    ncol = 3)),
                    nobs = .N),
                by = .(water_sn, baro_sn)]
@@ -411,7 +411,7 @@ setnames(predictors,
 
 predictors[, `:=`(air_temperature_c = nafill(air_temperature_c, "const", 0),
                   water_temperature_c = nafill(water_temperature_c, "const", 0),
-                  delta_at_c_min = nafill(delta_at_c_min, "const", 0))]
+                  delta_at_01c_min = nafill(delta_at_01c_min, "const", 0))]
 
 pred_mat <- 
   predictors[, .(intercept = list(matrix(rep(intercept, nobs),
@@ -419,7 +419,7 @@ pred_mat <-
                                          ncol = 1)),
                  B = list(matrix(c(air_temperature_c,
                                    water_temperature_c,
-                                   delta_at_c_min),
+                                   delta_at_01c_min),
                                  dimnames = list(c("b_at",
                                                    "b_wt",
                                                    "b_dat"),
@@ -590,8 +590,15 @@ oor_summary <-
               by = .(water_sn, baro_sn, experiment),
               .SDcols = patterns("_oo")]
 
+
+
 oor_summary[, lapply(.SD, sum), by = .(experiment), 
-            .SDcols = patterns("(w|t)_oo")]
+            .SDcols = patterns("(w|t)_oo")][
+              testing_data[, .N, by = .(experiment)], 
+              N := i.N,
+              on = "experiment"][, lapply(.SD, `/`, N), 
+                                 by = .(experiment),
+                                 .SDcols = patterns("(w|t)_oo")]
 
 oor_summary[, `:=`(delta_ooir = rect_ooir - raw_ooir,
                    delta_oopr = rect_oopr - raw_oopr)]
@@ -626,7 +633,7 @@ ggplot(data = predictions[experiment == "var-dis"],
   facet_wrap(~ water_sn, scales = "free")
 
 mod <- 
-  lm(raw_error_cm ~ air_temperature_c + water_temperature_c + delta_at_c_min, 
+  lm(raw_error_cm ~ air_temperature_c + water_temperature_c + delta_at_01c_min, 
      data = split(training_data, by = c("water_sn", "baro_sn"))[[1]])
 
 ints[, .(pred_range = median(pred_upr - pred_lwr), 

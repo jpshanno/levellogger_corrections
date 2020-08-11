@@ -224,25 +224,53 @@ fit_correction_mod <-
            intercept = TRUE){
     
     if(intercept){
-      mods <- 
-        data[, .(mod = list(lm(get(y) ~ get(x)))),
-             by = by]
+      form <- 
+        formula(paste(y, "~", paste(x, collapse = "+")))
     } else {
-      mods <- 
-        data[, .(mod = list(lm(get(y) ~ 0 + get(x)))),
-             by = by]
+      form <- 
+        formula(paste(y, "~ 0 + ", paste(x, collapse = "+")))
     }
     
-    mods[, `:=`(slope = vapply(mod, get_slope, numeric(1)),
-                intercept = vapply(mod, get_intercept, numeric(1)),
-                r2 = vapply(mod, get_r2, numeric(1)), 
-                p_value = vapply(mod, get_slope_p, numeric(1)))]
     
-    mods[, x_intercept := -intercept / slope][]
+    mods <- 
+      data[, .(mod = list(lm(form, data = .SD))),
+           by = by]
+    
+    mods[, intercept := vapply(mod, get_intercept, numeric(1))]
+    
+    slopes <- 
+      rbindlist(lapply(mods$mod, 
+                       function(m) {
+                         data.table(slope = list(matrix(get_slope(m), 
+                                                         nrow = 1, 
+                                                         dimnames = list(1, x))))
+                         }))
+    
+    mods <- 
+      cbind(mods, slopes)
+    
+    mods[, r2 := vapply(mod, get_r2, numeric(1))]
+    
+    p_values <- 
+      rbindlist(lapply(mods$mod,
+                       function(m) {
+                         data.table(slope_p = list(matrix(get_slope_p(m),
+                                                          nrow = 1,
+                                                          dimnames = list(1, x))))
+                       }))
+    
+    mods <- 
+      cbind(mods, p_values)
     
     if(!intercept){
-      mods[, `:=`(intercept = 0,
-                  x_intercept = 0)]
+      mods[, intercept := 0]
+    }
+    
+    if(length(mods$slope[[1]]) == 1){
+      mods[, x_intercept := -intercept / slope][]
+      if(!intercept){
+        mods[, x_intercept := 0]
+      }
     }
     
     mods
@@ -307,10 +335,10 @@ fit_correction_mmod <-
   }
 
 get_slope <- 
-  function(model, x = "get(x)"){
+  function(model){
     switch(class(model),
            lmerMod = lme4::fixef(model)[x],
-           coef(model)[x])
+           coef(model)[-c(1)])
   }
 
 get_intercept <- 
@@ -329,7 +357,12 @@ get_slope_p <-
     
     res <- tidy(model)
     
-    res[["p.value"]][which(res$term == x)]
+    p_values <- res[["p.value"]][which(res$term != "(Intercept)")]
+    
+    names(p_values) <- 
+      paste0("p_", res[["term"]][which(res$term != "(Intercept)")])
+    
+    p_values
     }
 
 get_r2 <- 
@@ -555,7 +588,10 @@ set_experiments <-
                                             by = 60)), 
              by = .(experiment)]
     
-    merge(data, design, by = "sample_time")
+    dat <- 
+      merge(data, design, by = "sample_time")
+    
+    dat[, dataset := fifelse(experiment == "test-dat", "training", "testing")][]
   }
 
 slp <- 
@@ -592,4 +628,52 @@ calculate_alignments <-
                  on = c(by, "x2>=min_x", "x2<=max_x")]
     
     merged_data[,.(alignment_offset_cm = mean(.SD[[y]])), by = by]
+  }
+
+find_optimal_lambda <- 
+  function(data, by = NULL, n = 100){
+    set.seed(1234)
+    
+    dat <- 
+      split(data, by = by)
+    
+    names(dat) <- 
+      sub("\\.", "_", names(dat))
+    
+    sampled <- 
+      lapply(dat,
+             generate_lambda_min,
+             n = n)
+    
+    optimal <- 
+      vapply(sampled, mean, numeric(1))
+    
+    list(sampled = sampled,
+         optimal = optimal)
+  }
+
+
+generate_lambda_min <- 
+  function(x, n){
+    Y <- 
+      x$raw_error_cm
+    
+    X <- 
+      as.matrix(x[, .(air_temperature_c, water_temperature_c, delta_at_01c_min)])
+    
+    replicate(n,
+              cv.glmnet(y = Y, 
+                        x = X, 
+                        alpha = 1, 
+                        lambda = c(10^seq(3, -6, by = -.1), 0))$lambda.min)
+  }
+
+rmse <- 
+  function(y_hat, y){
+    sqrt(mean((y_hat - y)^2))
+  }
+
+adjusted_r2 <- 
+  function(y_hat, y, nobs, k){
+    1 - (1-cor(y_hat, y)) * (nobs - 1) / (nobs - k - 1)
   }
