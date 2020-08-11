@@ -1,4 +1,10 @@
 .Rhistory
 .RData
 .Rproj.user
+.drake
 OLD/*
+tmp/*
+output/*
+True_Uncertainty_of_Water_Level_Measurements_after_Addressing_Temperature_Effects/*
+!True_Uncertainty_of_Water_Level_Measurements_after_Addressing_Temperature_Effects/True_Uncertainty_of_Water_Level_Measurements_after_Addressing_Temperature_Effects.Rmd
+!True_Uncertainty_of_Water_Level_Measurements_after_Addressing_Temperature_Effects/biblio.bib
