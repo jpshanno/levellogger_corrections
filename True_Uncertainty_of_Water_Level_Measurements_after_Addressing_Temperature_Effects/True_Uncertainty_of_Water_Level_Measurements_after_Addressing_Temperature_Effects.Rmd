@@ -311,7 +311,12 @@ depth.
 To perform compensation without utilizing a reference pressure, a multivariate
 ordinary least squares model was pair of water and air transducers. The 36 models
 took the form 
-$$\epsilon_L=\beta_0 + \beta_aT_a + \beta_wT_w + \beta_{\Delta T_a}\Delta T_a$$
+
+\begin{equation}
+\epsilon_L=\beta_0 + \beta_aT_a + \beta_wT_w + \beta_{\Delta T_a}\Delta T_a
+(\#eq:comp-base)
+\end{equation}
+
 where $T_a$, $T_w$, and $\Delta T_a$ represent air temperature, water temperature,
 and change in air temperature ($^oC\;min^{-1}$) respectively. 
 
@@ -325,6 +330,37 @@ where $L_c$ denotes the compensated water level. Both $L$ and $L_c$ were then
 centered by subtracting the mean of $\epsilon_L$ and $\hat\epsilon_L$, 
 respectively.
 
+Equation \@ref{eq:comp-base} was fit to the observed data to evaluate the
+hypothesis of a single multivariate compensation equation derived from only from
+known water depth. To account for the uncertainty of instrument error in the
+temperature compensation models, Equation 2 was fit repeatedly using a
+bootstrapping appraoch. For each transducer pair 1000 models were run. Input
+data from the models were taken as random samples from a distrubtion centered on
+the observed data with a standard deviation derived from the stated accuracy of
+the instruments (Table \@ref{tab-loggers}).
+
+\begin{equation}
+\tau_L \sim N(\epsilon_L, \sigma_{L'});\;\sigma_{L'} = \sqrt{2\sigma_L^2}\\
+\tau_a \sim N(T_a, \sigma_T)\\
+\tau_w \sim N(T_w, \sigma_T)\\
+\tau_{\Delta_{T_a}} \sim N(\Delta T_a, \sigma_{T'});\;\sigma_{T'} = \sqrt{2\sigma_T^2}\\
+
+\tau_L=\beta_0 + \beta_a\tau_a + \beta_w\tau_w + \beta_{\Delta T_a}\tau_{\Delta{T_a}}
+(\#eq:comp-boot)
+\end{equation}
+
+where $\tau_*$ represents the randomly generated value of each parameter.
+Predicted values for the test data were generated for each model by sampling
+from a random distrubtion with mean equal to the expected value and a standard
+deviation equivalent to the square root of the mean square error of the model.
+$$\hat\epsilon_{L_i} \sim N(\tau_L, \sigma_{model})$$,
+where $$\hat\epsilon_{L_i}$$ is the predicted error for the _i_th record.
+The predicted error was taken as the median of all calcualted
+$\hat\epsilon_{L_i}$ with upper and lower credibile intervals taken as the 0.025
+and 0.975 quantiles of all calcualted $\hat\epsilon_{L_i}$. Total uncertainty
+was partitioned into instrument and compensation errors by subtracting the
+stated instrument uncertainty.
+
 ## Compensation Evaluation
 
 To ensure independent evaluation of compensation, the accuracy of the models were
@@ -332,8 +368,10 @@ evaluated using the 4 days of data from each of the experimental periods describ
 above. Compensation were evaluated based on two criteria: number of
 recorded points which fell outside of the range of combined instrument errors
 ($n_{\epsilon,i}$) and the median absolute deviation (MAD) from the true values 
-as a percentage of the true value. Differences were tested using ANOVA with a
-post-hoc Tukey HSD analysis to compare between correction methods.
+as a percentage of the true value. Effect of compensation was tested as the
+pairwise difference in estimated
+marginal means of the MAD for corrected and uncorrected data within a given experimental period. 
+with a post-hoc Tukey HSD analysis to compare between correction methods.
 
 The purpose of developing transducer compensations is to correct field-collected
 data where true water level is unknown except for a relatively small collection
@@ -346,70 +384,129 @@ diurnal fluctuation, timing of water level peaks and drawdown, and daily summary
 statistics, are compared. These metrics were chosen to illustrate the impact of
 compensation on common metrics used in reported hydrologic data.
 
-## Uncertainty Analysis
-
-To determine the amount of uncertainty temperature compensation adds to water 
-level measurements the Equation 2 was fit using a Baysian framework which 
-propagated instrument uncertainty and regression uncertainty into the final 
-estimate of $\hat\epsilon_L$. For this model each observation is considered to come from a
-normally distributed dataset centered on the recorded value with a standard
-deviation derived from the stated accuracy and precision of the instruments (Table \@ref{tab-loggers}). Utilizing this framework we also explore the magnitude of
-uncertainty introduced by instrument error, compensation model, and thermal 
-regime.
-
-$$N(\epsilon_L, \tau_L)=\beta_0 + \beta_aN(T_a,\tau_a) + \beta_wN(T_w,\tau_w) + \beta_{\Delta T_a}N(\Delta T_a)$$
-
 ## Software
 All data processing and analysis was performed in R [@rcoreteam-2019] using the
 packages `data.table` [@dowle-2019] for data manipulation, `ggplot2`
-[@wickham-2016] and `patchwork` [@pedersen-2019a] for visualization, `brms`
-[@burkner-2017; @burkner-2018] for Bayesian uncertainty analysis, and `httr` 
-[@wickham-2019a] for Mesonet API access and caching. The `drake` [@landau-2018],
-`rmarkdown` [@allaire-2020; @xie-2018], `rticles` [@allaire-2019], and `rbbt`
-[@dunnington-2020] packages were used to generate a reproducible project and
-publication.
+[@wickham-2016] and `patchwork` [@pedersen-2019a] for visualization, `fixest`
+[@berge-2018] for linear models, and `httr` [@wickham-2019a] for Mesonet API
+access and caching. The `drake` [@landau-2018], `rmarkdown` [@allaire-2020;
+@xie-2018], `rticles` [@allaire-2019], and `rbbt` [@dunnington-2020] packages
+were used to generate a reproducible project and publication.
 
 
 # Results
 
+## Compensation
+All of the thirty-six final models fit using Equation \@ref{eq:comp-base}
+showed a good fit to the data ($R^2$ __paste("$", round(mean(mods$r2), 2),
+"\\pm", round(sd(mods$r2)/sqrt(length(mods$r2)), 3), "$")__). Root-mean squared
+errors for the models ranged from #### to #### cm. The bootstrap predictions 
+had RMSE values that ranged from #### to #### cm, which includes the uncertainty
+inherent in the uncertainty of instrument measurements. The median absolute 
+deviation from true water level showed a mean change of -0.014, -0.042, 0.075, and 
+-0.673 cm within the _stat-sim_, _stat_dis_, _var-sim_, and
+_var-dis_ experimental periods. The reduction in MAD for the _stat-dis_ and 
+_var-dis_ period were significant at the $\alpha=0.05$ level, as was the increase
+in MAD in the _var-sim_ period. The number of transducer pairs with points that 
+fell outside of the instrument error range was reduced 
+
+Prior to compensation #### +/- ##### points fell
+outside of the 95% confidence band defined by the true water level +/-
+qnorm(0.975) times the combined instrument errors of the barometric and water
+pressure transducers. Following compensation #### points fell outside of that
+same confidence band. When the interval is expanded to include to instrument
+uncertainty and the temperature compensation #### and #### points of the raw and
+compensated data, respectively, fell outside the interval.
+
+## Uncertainty Analysis
+
 We saw that the different thermal regimes in the experiments could still be 
 explained by a single unified model.
-
-There was a storm that came through, could have strong pressure gradient
-One barologger found resting on gravel/in water in cylinder during variable,
-similar experiment.
 
 There should be some variability in the error around points, and if I can 
 demonstrate how that varies with the difference between air and water temperature
 then I could actually quantify the uncertainty you add to your measurements when
 you do not have your loggers in thermally similar regimes
 
-
-
 # Conclusions
-Could need a greater range of temperatures during var-sim to really check for
-temperature impacts.
 
-When correcting the barometric data knowing the air temperature difference is
-important because it provides the threshold for usable data for the correction
-models. You can then discard the data where temperature difference is above the
-threshold and expect your final predictions to have higher errors where
-temperature difference is greater.
+Our results show that for absolute pressure transducers error is introduced
+primarily through independent water and air temperature errors. Correcting for
+water level error using temperature difference would disregard the differential 
+transducer responses. By using the models developed in this study it is possible
+to look at the impact of considering temperature differential relative to 
+absolute temperature. Figure ### shows the result of simulating errors using a 
+fixed water temperature and varying air temperature, and fixed temperatuer 
+differential between varying air and water temperatures. We can see that the
+two sources of errors move in opposite directions, and in general the effect of
+air temperature along is much larger than the effect of a moving temperature 
+differential window. 
+
+We also showed that it is possible to correct water-depth derived from two
+pressure transducers without the need to reference to an external data source.
+Any transducer compensation approach must be a trade-off between convenience,
+absolute accuracy, and uncertainty. The described approach to compensation
+achieves accuracy that corrects most data to within the bounds instrument error.
+It can be performed with at a monitoring location with little to no extra
+equipment. By minimizing the number of models required for compensation the
+multivariate constant water-depth approach also reduces the uncertainty added to
+the final water depth measurement. A similar error reduction was performed using
+external barometric data and correcting each transducer type separately (data
+not shown). These data showed a similar improvement in accuracy but with added
+uncertainty from additional compensation models and additional instrument error.
+
+Both @cain-2004 and @liu-2015 recommend that lab-based compensation equations be
+developed for deployed transducers. Building upon that we have demonstrated that
+it is possible to develop a single lab-based correction suitable for varied
+deployment environments. However, developing a compensation equation under
+conditions similar to field conditions may be more desireable. The need for
+regularization in the compensation models illustrates that there is a risk for
+overfitting compensation models to test conditions. This issue was especially
+clear in the *var-sim* conditions, where we observed a small but significant
+increase in RMSE for corrected water levels. We believe that the inaccuracies
+arise from the internal temperature compensation of the pressure transducers.
+The data used to train our models were purposefully collected under the most
+extreme conditions, with large, rapid temperature fluctuations in the barometric
+and water pressure readings. Under these conditions the internal temperature
+compensation algorithm is likely overwhelmed. Under conditions with smaller,
+slower temperature fluctations, the compensation models tend to overcorrect the
+data because the internal temperature compensation has already dampened the
+temperature-induced errors. If measurement conditions are similar to compensation
+conditions, an OLS regression approach would likely provide improved accuracy at
+the expense of generalizability. Idenitying the need for regularization in the
+compensation illustrates the importance of using an independent dataset to 
+validate compensation models. Use of multiple independent validation sets also
+allow for the creation of a single model for situations where monitoring 
+conditions may vary significantly. 
+
+The majority of errors in this study are attributable to (**expand with 
+specifics**) individual transducer The barometric transducer 1065861 appears to be 
+more sensitive to high rates of temperature change, as can be seen in Figure ####,
+leading to larger errors at the beginning and end of the *var-dis* period. 
+Transducers #### and #### also show larger errors, and account for all of the
+increase in OOR measurements in the *var-sim* period. The approach laid out 
+above could, and should, be used to tune the compensation for individual loggers.
+That scale of tuning is outside of the scope of this paper, which is instead 
+focused on commonalities in compensation that can be applied across instruments
+and manufacturers. 
+
+Regularization penalizes variabiles with large slopes. This results in models
+that are less prone to overfitting and to being driven entirely by a single
+variable. It also has the effective of making the models less sensitive to
+predictors. This can be seen in Figure #### where the penalized model from above
+is compared to a OLS model with the same form fit to the training data. In the
+training data, error is further reduced from the regularized model, but
+increases when examining the testing data.
 
 
-Highlight areas where different artifacts are present. Then it can be a guide for
-where people should at their data to find artifacts.
+
+Highlight areas where different artifacts are present. Then it can be a guide
+for where people should at their data to find artifacts.
 
 Separate out sensor-specific corrections vs generic corrections. Do any appear
 to be
 
-Separate air and water temperature responses are importantly different than a
-single temperature difference model. Each logger behaves independently and 
-WT = 15, AT = 25 may be different than WT = 5, AT = 15 and WT = 10, AT = 20
 
-Multivariate approach vs single steps to reference: multivariate has the 
-advantage of not introducing an additional instrument uncertainty into the 
-compensation. 
 
 **Why Perform these Corrections?**
 One could argue that it’s not worth the additional uncertainty for a reduction
@@ -439,16 +536,22 @@ model. We tested this on inter-experiment data excluded from this analysis and
 found that ... (move from outside to inside for stat-dis and the long gradual
 decrease in temperature after a short rapid change)
 
-The authors have chosen to focus on trend correction rather than offset. In 
-general systematic offsets are corrected through manual calibration measurements
-during deployment. If deployed conditions will not allow for manual calibration
-measurements, the above approaches are applicable, but offsets must be carefully
-calculated. This will involve know the exact elevation difference between 
-the instrument supplying reference pressure measurements and pressure transducers
-during calibration.
+One final note, the authors have chosen to focus on trend correction rather than
+offset. In general systematic offsets are corrected through manual calibration
+measurements during deployment. If deployed conditions will not allow for manual
+calibration measurements, the above approaches are applicable, but offsets must
+be carefully calculated, which may require external pressure measurements as a
+reference.
 
 I cannot compare if the water level errors are of fixed magnitude or percentage
 based. I could make some educated guess from the barometric transducers though.
+
+FIGURE: Create point-range plots of published water level fluctuation rates. Then
+add in a threshold line for the median prediction-interval range from this study
+to see how often these values could be artifacts and not true measurements
+
+The median absolute deviation was correlated with ..., 
+indicating that is the largest source of error.
 
 ## Recommendations
 
@@ -470,6 +573,19 @@ errors due to rapid water temperature changes. This is likely because of the
 buffered $\Delta T_w$ relative to $\Delta T_a$. In setting where rapid changes
 in water temperature are possible calibration should consider including a
 persistent impact.
+
+- Develop instrument specific compensation models in similar settings to data
+collection. Ideally a known-water level reference model would be developed with
+the loggers in situ at the monitoring site. (Describe dry-well deployment)
+
+- Compensation is essential when transducers are deployed in settings with 
+variable conditions.
+
+- Even without additional compensation errors, instrument errors can cause errors
+of the same order of magnitude as previously published reports
+
+- Do this type of calibration at your field location if possible. Also perform
+multiple times in different conditions if possible.
 
 \acknowledgments
 The acknowledgments must list:
