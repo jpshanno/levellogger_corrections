@@ -26,7 +26,7 @@ keypoints:
   - "List up to three key points (at least one is required)"
   - "Key Points summarize the main points and conclusions of the article"
   - "Each must be 100 characters or less with no special characters or punctuation"
-abstract: "A good abstract will begin with a short description of the problem being addressed, briefly describe the new data or analyses, then briefly states the main conclusion(s) and how they are supported and uncertainties."
+abstract: "However, compensation approaches are a critical tool for correcting previous monitoring data that may not have subscribed to best practices, or when it is unknown if deployment followed best practices."
 plain_language_summary: "Some journals require a plain language summary. See: https://publications.agu.org/author-resource-center/text-requirements/#abstract"
 output: 
     bookdown::word_document2:
@@ -309,8 +309,8 @@ minus the absolute air pressure ($L = P_w - P_a$). Water level error
 depth.
 
 To perform compensation without utilizing a reference pressure, a multivariate
-ordinary least squares model was pair of water and air transducers. The 36 models
-took the form 
+linear model was fit for each pair of water and air transducers using LASSO 
+regularization [@kuhn-2013]. The 36 models took the form
 
 \begin{equation}
 \epsilon_L=\beta_0 + \beta_aT_a + \beta_wT_w + \beta_{\Delta T_a}\Delta T_a
@@ -318,14 +318,19 @@ took the form
 \end{equation}
 
 where $T_a$, $T_w$, and $\Delta T_a$ represent air temperature, water temperature,
-and change in air temperature ($^oC\;min^{-1}$) respectively. 
+and change in air temperature respectively. The units of $\Delta T_a$ are set as $0.01^oC\;min^{-1}$ to place them on the same scale as $\epsilon_L$ $T_a$, 
+and $T_w$. LASSO regularization penalizes model fits with large $\B$ values by
+minimizing the loss function. The penalty parameter $\lambda$ was determined by
+running 100 10-fold cross-validation simulations for each model and extracting
+the value $\lambda$ that minimized the RSME of the model. The mean of the 100
+$\lambda$ values was used as the final parameter in each model. This approach
+was taken because of instability in single estiamtes of $\lambda$ for these
+models.
+** could simplify this model to OLS if LASSO payoff isn't enough for added complexity**
 
-To avoid compensating unimpacted loggers, all $\beta$ terms with a p-value > 0.05 were 
-set to zero prior to applying the compensation to the test data. For each 
-water-air transducer pair the correct compensation model was used to predict the 
-error ($\hat\epsilon_L$), which was used to compensate the recorded water levels 
-such that
-$$L_c = L - \hat\epsilon_L$$
+For each water-air transducer pair the correct compensation model was used to
+predict the error ($\hat\epsilon_L$), which was used to compensate the recorded
+water levels such that $L_c = L - \hat\epsilon_L$.
 where $L_c$ denotes the compensated water level. Both $L$ and $L_c$ were then
 centered by subtracting the mean of $\epsilon_L$ and $\hat\epsilon_L$, 
 respectively.
@@ -333,23 +338,26 @@ respectively.
 Equation \@ref{eq:comp-base} was fit to the observed data to evaluate the
 hypothesis of a single multivariate compensation equation derived from only from
 known water depth. To account for the uncertainty of instrument error in the
-temperature compensation models, Equation 2 was fit repeatedly using a
-bootstrapping appraoch. For each transducer pair 1000 models were run. Input
-data from the models were taken as random samples from a distrubtion centered on
-the observed data with a standard deviation derived from the stated accuracy of
-the instruments (Table \@ref{tab-loggers}).
+temperature compensation models, Equation 2 was fit repeatedly using a two-stage
+parametric bootstrapping approach [@buonaccorsi-2010]. The two-stage boostrap 
+first samples the observed data with replacement to create a data set of equal
+size as the observations. For each coordinate ($Y, X_1, X_2, X_3$) an error is
+added to each term, drawn from a normal distrubtion cetnered on zero with 
+standard deviation equal to the
+known instrument error for each variable (Table \@ref{tab-loggers}). For each transducer pair 1000 models were run.
 
 \begin{equation}
-\tau_L \sim N(\epsilon_L, \sigma_{L'});\;\sigma_{L'} = \sqrt{2\sigma_L^2}\\
-\tau_a \sim N(T_a, \sigma_T)\\
-\tau_w \sim N(T_w, \sigma_T)\\
-\tau_{\Delta_{T_a}} \sim N(\Delta T_a, \sigma_{T'});\;\sigma_{T'} = \sqrt{2\sigma_T^2}\\
+\epsilon_L^* = \epsilon_L + N(0, \sigma_{L'});\;\sigma_{L'} = \sqrt{2\sigma_L^2}\\
+T_a^* = T_a + N(0, \sigma_T)\\
+T_w^* = T_w + N(0, \sigma_T)\\
+\Delta T_a^* = \Delta T_a + N(0, \sigma_{T'});\;\sigma_{T'} = \sqrt{2\sigma_T^2}\\
 
-\tau_L=\beta_0 + \beta_a\tau_a + \beta_w\tau_w + \beta_{\Delta T_a}\tau_{\Delta{T_a}}
+\epsilon_L^*=\beta_0 + \beta_aT_a^* + \beta_wT_w^* + \beta_{\Delta T_a}\Delta T_a^*
 (\#eq:comp-boot)
 \end{equation}
 
-where $\tau_*$ represents the randomly generated value of each parameter.
+where $^*$ denotes bootstrap samples plus instrument error.
+
 Predicted values for the test data were generated for each model by sampling
 from a random distrubtion with mean equal to the expected value and a standard
 deviation equivalent to the square root of the mean square error of the model.
@@ -361,17 +369,23 @@ and 0.975 quantiles of all calcualted $\hat\epsilon_{L_i}$. Total uncertainty
 was partitioned into instrument and compensation errors by subtracting the
 stated instrument uncertainty.
 
+**should probably look at running models with standardize = FALSE because I
+already have all of X on the same scale**
+
+**additionally set penalty.factor to zero for delta_at**
+
 ## Compensation Evaluation
 
 To ensure independent evaluation of compensation, the accuracy of the models were
 evaluated using the 4 days of data from each of the experimental periods described
-above. Compensation were evaluated based on two criteria: number of
+above. Compensation effectiveness was evaluated based on two criteria: number of
 recorded points which fell outside of the range of combined instrument errors
 ($n_{\epsilon,i}$) and the median absolute deviation (MAD) from the true values 
 as a percentage of the true value. Effect of compensation was tested as the
-pairwise difference in estimated
-marginal means of the MAD for corrected and uncorrected data within a given experimental period. 
-with a post-hoc Tukey HSD analysis to compare between correction methods.
+pairwise difference in estimated marginal means of the RMSE for corrected and 
+uncorrected data within a given experimental period. Additionally estimated 
+marginal means of the corrected data RMSE were compared across experimental 
+period.
 
 The purpose of developing transducer compensations is to correct field-collected
 data where true water level is unknown except for a relatively small collection
@@ -402,21 +416,66 @@ showed a good fit to the data ($R^2$ __paste("$", round(mean(mods$r2), 2),
 "\\pm", round(sd(mods$r2)/sqrt(length(mods$r2)), 3), "$")__). Root-mean squared
 errors for the models ranged from #### to #### cm. The bootstrap predictions 
 had RMSE values that ranged from #### to #### cm, which includes the uncertainty
-inherent in the uncertainty of instrument measurements. The median absolute 
-deviation from true water level showed a mean change of -0.014, -0.042, 0.075, and 
--0.673 cm within the _stat-sim_, _stat_dis_, _var-sim_, and
-_var-dis_ experimental periods. The reduction in MAD for the _stat-dis_ and 
+inherent in the uncertainty of instrument measurements. The RMSE relative to 
+true water level showed a mean change of -0.001, -0.058, 0.042 <-- was 0.075 with OLS ->>, and 
+-0.612 <-- was -0.673 with OLS --> cm within the _stat-sim_, _stat_dis_, _var-sim_, and
+_var-dis_ experimental periods. The reduction in RMSE for the _stat-dis_ and 
 _var-dis_ period were significant at the $\alpha=0.05$ level, as was the increase
-in MAD in the _var-sim_ period. The number of transducer pairs with points that 
-fell outside of the instrument error range was reduced 
+in RMSE in the _var-sim_ period. When the two water pressure transducers that 
+showed outlier model performance (2025928 & 2030899, Figure #### (RMSE or Sigma plot)) 
+the increase in RMSE in the _var-sim_ period was reduced to -0.018 and was no
+longer significant **Could potentially go into conclusions**. The number of 
+transducer pairs with points that fell outside of the instrument error range 
+followed similar patterns to the RMSE results (Table).
 
-Prior to compensation #### +/- ##### points fell
-outside of the 95% confidence band defined by the true water level +/-
-qnorm(0.975) times the combined instrument errors of the barometric and water
-pressure transducers. Following compensation #### points fell outside of that
-same confidence band. When the interval is expanded to include to instrument
-uncertainty and the temperature compensation #### and #### points of the raw and
-compensated data, respectively, fell outside the interval.
+Prior to compensation #### +/- ##### points fell outside of the 95% confidence
+band defined by the true water level +/- qnorm(0.975) times the combined
+instrument errors of the barometric and water pressure transducers. Following
+compensation #### points fell outside of that same confidence band. When the
+interval is expanded to include to instrument uncertainty and the temperature
+compensation #### and #### points of the raw and compensated data, respectively,
+fell outside the interval.
+
+```{r oor}
+
+drake::loadd(predicted)
+
+predicted[, `:=`(raw_ooir = !between(raw_water_level_cm, 
+                                     water_depth_cm - qnorm(0.975) * instrument_error_cm,
+                                     water_depth_cm + qnorm(0.975) * instrument_error_cm),
+                   rect_ooir = !between(rect_water_level_cm, 
+                                       water_depth_cm - qnorm(0.975) * instrument_error_cm,
+                                       water_depth_cm + qnorm(0.975) * instrument_error_cm),
+                   raw_oopr = !between(raw_water_level_cm, 
+                                      water_depth_cm - (predicted_error_cm - lower_bound_cm),
+                                      water_depth_cm + (upper_bound_cm - predicted_error_cm)),
+                   rect_oopr = !between(rect_water_level_cm, 
+                                       water_depth_cm - (predicted_error_cm - lower_bound_cm),
+                                       water_depth_cm + (upper_bound_cm - predicted_error_cm)))]
+
+oor_summary <- 
+  predicted[, lapply(.SD, sum),
+              by = .(water_sn, baro_sn, experiment),
+              .SDcols = patterns("_oo")]
+
+oor_count <- 
+  oor_summary[, lapply(.SD, sum), by = .(experiment), 
+              .SDcols = patterns("(w|t)_oo")]
+
+oor_percent <- 
+  oor_count[combined_data$testing[, .N, by = .(experiment)], 
+            N := i.N,
+            on = "experiment"][, lapply(.SD, `/`, N), 
+                               by = .(experiment),
+                               .SDcols = patterns("(w|t)_oo")]
+
+knitr::kable(experiments,
+             align = "c",
+             caption = "Description of experimental conditions.")
+
+```
+
+
 
 ## Uncertainty Analysis
 
@@ -429,6 +488,8 @@ then I could actually quantify the uncertainty you add to your measurements when
 you do not have your loggers in thermally similar regimes
 
 # Conclusions
+
+## Single Equation Compensations
 
 Our results show that for absolute pressure transducers error is introduced
 primarily through independent water and air temperature errors. Correcting for
@@ -459,82 +520,94 @@ Both @cain-2004 and @liu-2015 recommend that lab-based compensation equations be
 developed for deployed transducers. Building upon that we have demonstrated that
 it is possible to develop a single lab-based correction suitable for varied
 deployment environments. However, developing a compensation equation under
-conditions similar to field conditions may be more desireable. The need for
-regularization in the compensation models illustrates that there is a risk for
-overfitting compensation models to test conditions. This issue was especially
-clear in the *var-sim* conditions, where we observed a small but significant
+conditions similar to field conditions may be more desireable. The degraded
+performance under *var-sim* conditions relative to all other periods highlights
+this point. Under *var-sim* conditions we observed a small but significant
 increase in RMSE for corrected water levels. We believe that the inaccuracies
-arise from the internal temperature compensation of the pressure transducers.
-The data used to train our models were purposefully collected under the most
-extreme conditions, with large, rapid temperature fluctuations in the barometric
-and water pressure readings. Under these conditions the internal temperature
-compensation algorithm is likely overwhelmed. Under conditions with smaller,
-slower temperature fluctations, the compensation models tend to overcorrect the
-data because the internal temperature compensation has already dampened the
-temperature-induced errors. If measurement conditions are similar to compensation
-conditions, an OLS regression approach would likely provide improved accuracy at
-the expense of generalizability. Idenitying the need for regularization in the
-compensation illustrates the importance of using an independent dataset to 
-validate compensation models. Use of multiple independent validation sets also
-allow for the creation of a single model for situations where monitoring 
-conditions may vary significantly. 
+arise from one of two causes. The first is that the *var-sim* conditions had
+higher water levels than any of the other experimental periods. Models developed
+on our training data were therefore extrapolating to *var-sim* conditions. The
+second possible reason for decreased predictive power is the internal
+temperature compensation of the pressure transducers. The data used to train our
+models were purposefully collected under the extreme conditions, with
+large, rapid temperature fluctuations in both the air and water readings. Under 
+these conditions the internal temperature compensation algorithm
+is likely overwhelmed. Under conditions with smaller, slower temperature
+fluctations, the compensation models tend to overcorrect the data because the
+internal temperature compensation has already dampened the temperature-induced
+errors. If measurement conditions are similar to compensation conditions, an OLS
+regression approach would likely provide improved accuracy at the expense of
+generalizability. Idenitying the need for regularization in the compensation
+illustrates the importance of using an independent dataset to validate
+compensation models. Use of multiple independent validation sets also allow for
+the creation of a single model for situations where monitoring conditions may
+vary significantly.
 
-The majority of errors in this study are attributable to (**expand with 
-specifics**) individual transducer The barometric transducer 1065861 appears to be 
-more sensitive to high rates of temperature change, as can be seen in Figure ####,
-leading to larger errors at the beginning and end of the *var-dis* period. 
-Transducers #### and #### also show larger errors, and account for all of the
-increase in OOR measurements in the *var-sim* period. The approach laid out 
-above could, and should, be used to tune the compensation for individual loggers.
-That scale of tuning is outside of the scope of this paper, which is instead 
-focused on commonalities in compensation that can be applied across instruments
-and manufacturers. 
+The majority of errors in this study are attributable to (**expand with
+specifics**) individual transducer The barometric transducer 1065861 appears to
+be more sensitive to high rates of temperature change, leading to larger errors
+at the beginning and end of the *var-dis* period (Figure ####). This is further
+supported by the increased error associated with the compensation models for
+transducer 1065861 relative to transducer 1066019 (Figure of sigma distrubtion
+of bootstrapped models). Transducers #### and #### also show larger errors, and
+account for all of the increase in OOR measurements in the *var-sim* period.
+When looking at the distributino of model RMSEs, transducer 2013939 showed no
+overlap in the RMSE range of all other models. This suggests that even with
+regularization this logger is overfit to the training data, relative to other
+models, resulting in degraged performance in the test data. Conversely
+transducer 2025928 shows higher RMSE and $\sigma_{mod}$, but no reduction in
+$R^2$. It is possible that 2025928 is less sensitive to the models considered,
+or is more sensitive to an unmodeled driver (e.g. rate of change of water
+temperature). The approach laid out above could, and should, be used to tune the
+compensation for individual loggers such as **2025928, 2013939, and 1065861**. That
+scale of tuning is outside of the scope of this paper, which is instead focused
+on commonalities in compensation that can be applied across instruments and
+manufacturers. By including multiple pairs of barometric and water pressure
+transducers, we are able to isolate model errors to either the barometric or
+water measurements. If multiple loggers are not available for simultanous
+compensation performing preliminary or post-correction checks against and
+external data source is necessary to account for any errors.
 
 Regularization penalizes variabiles with large slopes. This results in models
 that are less prone to overfitting and to being driven entirely by a single
 variable. It also has the effective of making the models less sensitive to
 predictors. This can be seen in Figure #### where the penalized model from above
 is compared to a OLS model with the same form fit to the training data. In the
-training data, error is further reduced from the regularized model, but
-increases when examining the testing data.
+training data, error is reduced relative to the regularized model, but
+increases relative to the regularized model when examining the testing data.
 
+There have been no studies examining the impact of uncertainty of water level
+transducer measurements. Additionally no studies looking at the compensation of
+water level pressure transducers have been designed to test for commonality of 
+compensation approaches across multiple loggers.
 
+Best practice for deploying pressure transducers dictate that the barometric and
+water transducers are placed in similar thermal regimes, regardless of available
+compensation approaches. However, compensation approaches are a critical tool 
+for correcting previous monitoring data that may not have subscribed to best 
+practices, or when it is unknown if deployment followed best practices.
 
-Highlight areas where different artifacts are present. Then it can be a guide
-for where people should at their data to find artifacts.
+## The Role of Uncertainty in Water Level Measurements
+We found that under certain conditions water level errors exceeded instrument
+accuracy bounds. Importantly the errors, both within and outside of instrument
+accuracy bounds, were correlated with environmental conditions. The problem is
+especially vexing because the points that are most likely to lie outside of the
+error bounds occur simultaneously with the most extreme temperatures or the
+fastest rate of temperature change. These conditions often co-occur with
+important hydrologic periods, such as changes in flow following a storm or
+periods of peak evapotranspiration. To confidently attribute diurnal or seasonal
+signals to true variation rather than error requires additional validation,
+specifically when the amplitude of the signal is less than or close to the
+instrument error. Validation may take the form of additional instrumentation not
+susceptible to the same error source or frequent manual measurements as in
+[@cuevas-2010; @gribovszki-2013]. It may also be possible to use the development
+of compensation equations to quantify and environmentally-induced errors and
+rule them out from causing the signal of interest.
 
-Separate out sensor-specific corrections vs generic corrections. Do any appear
-to be
-
-
-
-**Why Perform these Corrections?**
-One could argue that it’s not worth the additional uncertainty for a reduction
-in points outside of the measurement error range. There are three arguments
-against this. The first is the idealistic argument that we should want the
-correct data for the correct reason. Have measurements stay within the error
-bounds due to competing biases is not a good strategy from an idealistic or a
-pragmatic view. The points that are most likely to lie outside of the error
-bounds have the greatest temperature difference between transducers or show the
-fastest rate of change. These are often significant events: changes in flow
-following a storm or periods of peak ET where water temperature and air
-temperature are likely to be at their maximum. Building on these two reasons is
-that an understanding of the true uncertainty of  measured data will allow more
-critical and accurate interpretation. How strong are the diurnal signals in
-relation to known uncertainty.
-
-
-
-Temperature compensation could be overstated based on the time scale of the
-study. Would have to know how quickly Solinst changes temperatures in their
-calibrations. [@freeman-2004] talks about this stating that it could be a rate
-of change issue and/or the fact that parts of the electronics may change
-temperatures at different times. Relatedly, it is important to note that these
-rapid temperature changes were short-lived and the offset of the $\Delta T$
-models may decline over time much as an intervention effect in a time series
-model. We tested this on inter-experiment data excluded from this analysis and
-found that ... (move from outside to inside for stat-dis and the long gradual
-decrease in temperature after a short rapid change)
+To build additional analyses and models on top of the amplitude and timing of
+these signals we must first quanitify the propagated uncertainty. With an 
+understanding of the uncertainty and its drivers, we can then evaluate how 
+strong the signal is relative to uncertainty. 
 
 One final note, the authors have chosen to focus on trend correction rather than
 offset. In general systematic offsets are corrected through manual calibration
@@ -543,15 +616,21 @@ calibration measurements, the above approaches are applicable, but offsets must
 be carefully calculated, which may require external pressure measurements as a
 reference.
 
-I cannot compare if the water level errors are of fixed magnitude or percentage
-based. I could make some educated guess from the barometric transducers though.
-
 FIGURE: Create point-range plots of published water level fluctuation rates. Then
 add in a threshold line for the median prediction-interval range from this study
 to see how often these values could be artifacts and not true measurements
 
-The median absolute deviation was correlated with ..., 
-indicating that is the largest source of error.
+<!-- The median absolute deviation was correlated with ...,  -->
+<!-- indicating that is the largest source of error. -->
+
+<!-- Highlight areas where different artifacts are present. Then it can be a guide -->
+<!-- for where people should at their data to find artifacts. -->
+
+<!-- Separate out sensor-specific corrections vs generic corrections. Do any appear -->
+<!-- to be -->
+
+<!-- I cannot compare if the water level errors are of fixed magnitude or percentage -->
+<!-- based. I could make some educated guess from the barometric transducers though. -->
 
 ## Recommendations
 
@@ -605,67 +684,3 @@ It is also the appropriate place to thank colleagues and other contributors.
 AGU does not normally allow dedications. 
 
 # References
-
-\begin{notation}
-\notation{$a+b$} Notation Definition here
-\notation{$e=mc^2$}
-Equation in German-born physicist Albert Einstein's theory of special
-relativity that showed that the increased relativistic mass ($m$) of a
-body comes from the energy of motion of the body—that is, its kinetic
-energy ($E$)—divided by the speed of light squared ($c^2$).
-\end{notation}
-
-<!-- Or section title might be a descriptive heading about the results -->
-
-<!-- Enter Figures and Tables near as possible to where they are first mentioned: -->
-<!-- DO NOT USE \\psfrag or \\subfigure commands. -->
-<!-- DO NOT USE \\newcommand, \\renewcommand, or \\def, etc. -->
-
-<!-- ```{r} -->
-<!-- plot(pressure) -->
-<!-- ``` -->
-
-<!-- Example table -->
-
-<!-- \begin{table} -->
-<!--  \caption{Time of the Transition Between Phase 1 and Phase 2$^{a}$} -->
-<!--  \centering -->
-<!--  \begin{tabular}{l c} -->
-<!--  \hline -->
-<!--   Run  & Time (min)  \\ -->
-<!--  \hline -->
-<!--    $l1$  & 260   \\ -->
-<!--    $l2$  & 300   \\ -->
-<!--    $l3$  & 340   \\ -->
-<!--    $h1$  & 270   \\ -->
-<!--    $h2$  & 250   \\ -->
-<!--    $h3$  & 380   \\ -->
-<!--    $r1$  & 370   \\ -->
-<!--    $r2$  & 390   \\ -->
-<!--  \hline -->
-<!--  \multicolumn{2}{l}{$^{a}$Footnote text here.} -->
-<!--  \end{tabular} -->
-<!--  \end{table} -->
-
-<!-- AGU prefers the use of {sidewaystable} over {landscapetable} as it causes fewer problems. -->
-
-<!-- ```{r, fig.env = "sidewaysfigure"} -->
-<!-- plot(pressure) -->
-<!-- ``` -->
-
-<!-- \begin{sidewaystable} -->
-<!-- \caption{Caption here} -->
-<!-- \label{tab:signif_gap_clos} -->
-<!-- \begin{tabular}{ccc} -->
-<!-- one&two&three\\ -->
-<!-- four&five&six -->
-<!-- \end{tabular} -->
-<!-- \end{sidewaystable} -->
-
-<!-- If using numbered lines, please surround equations with \\begin{linenomath\*}... \\end{linenomath\*} -->
-
-<!-- \begin{linenomath*} -->
-<!-- \begin{equation} -->
-<!-- y|{f} \sim g(m, \sigma) -->
-<!-- \end{equation} -->
-<!-- \end{linenomath*} -->

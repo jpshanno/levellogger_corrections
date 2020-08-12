@@ -89,6 +89,8 @@ plan <-
     
     # Should break this step up to save the models and then save the fit info
     # list as a separate target
+    
+    # Add samples to fit_metrics. Move lambda to fit_metrics
     bootstrap_models = {
       dat <- 
         split(combined_data[["training"]],
@@ -171,6 +173,7 @@ plan <-
                                                           tidy(mod)),
                                 fit_metrics = data.table(model_id, 
                                                          rep = i, 
+                                                         samples = list(data.table(samples = samples)),
                                                          sigma = sigma(mod), 
                                                          adj_r2,
                                                          rmse = rmse,
@@ -184,10 +187,191 @@ plan <-
       )
       
       
-      setNames(lapply(1:2, function(i){rbindlist(unlist(lapply(mods, function(x){lapply(x, `[[`, i)}), recursive = FALSE))}), c("coefficients", "fit_metrics"))
+      mods <- 
+        setNames(lapply(1:2, function(i){rbindlist(unlist(lapply(mods, function(x){lapply(x, `[[`, i)}), recursive = FALSE))}), c("coefficients", "fit_metrics"))
       
-    }
+      lapply(mods, 
+             function(x){x[, c("water_sn", "baro_sn") := tstrsplit(model_id, split = "_")]})
+    },
     
+    predicted = {
+      posterior_pred <-
+        disk.frame("output/tabular/bootstrap_predictions_test_data.df")
+
+      predictions <-
+        posterior_pred[, .(predicted_error_cm = quantile(predicted_error_cm, probs = 0.5),
+                           lower_bound_cm = quantile(predicted_error_cm, probs = 0.025),
+                           upper_bound_cm = quantile(predicted_error_cm, probs = 0.975)),
+                       by = .(water_sn, baro_sn, sample_time),
+                       keep = c("water_sn", "baro_sn", "sample_time", "predicted_error_cm")]
+      
+      predictions[, `:=`(water_sn = as.character(water_sn),
+                         baro_sn = as.character(baro_sn))]
+      
+      setkey(combined_data$testing, "water_sn", "baro_sn", "sample_time")
+      setkey(predictions, "water_sn", "baro_sn", "sample_time")
+      
+      predictions[combined_data$testing,
+                  `:=`(experiment = i.experiment,
+                       water_depth_cm = i.water_depth_cm,
+                       raw_water_level_cm = i.raw_water_level_cm,
+                       raw_error_cm = i.raw_error_cm,
+                       instrument_error_cm = i.instrument_error_cm)]
+      
+      predictions[, rect_water_level_cm := raw_water_level_cm - predicted_error_cm]
+      predictions[, `:=`(raw_water_level_cm = raw_water_level_cm - mean(raw_water_level_cm - water_depth_cm),
+                         rect_water_level_cm = rect_water_level_cm - mean(rect_water_level_cm - water_depth_cm)),
+                  by = .(water_sn, baro_sn, experiment)]
+    }
+      
+    # Runs out of memory. Ran once interactively to build disk.frame. Need to 
+    # sort this out
+    # {
+    #   predictors <- 
+    #     dcast(rbind(bootstrap_models$fit_metrics[, .(model_id, water_sn, baro_sn, rep,
+    #                                                  term = "sigma", estimate = sigma)], 
+    #                 bootstrap_models$coefficients[, .(model_id, water_sn, baro_sn, 
+    #                                                   rep, term, estimate)], 
+    #                 fill = TRUE),
+    #           model_id + water_sn + baro_sn + rep ~ term,
+    #           value.var = "estimate")
+    #   
+    #   predictors[combined_data$testing[, .(nobs = .N), .(water_sn, baro_sn)],
+    #              nobs := i.nobs,
+    #              on = c("water_sn", "baro_sn")]
+    #   
+    #   setnames(predictors, 
+    #            c("(Intercept)", "rep"),
+    #            c("intercept", "replication"))
+    #   
+    #   predictors[, `:=`(air_temperature_c = nafill(air_temperature_c, "const", 0),
+    #                     water_temperature_c = nafill(water_temperature_c, "const", 0),
+    #                     delta_at_01c_min = nafill(delta_at_01c_min, "const", 0))]
+    #   
+    #   pred_mat <- 
+    #     predictors[, .(intercept = list(matrix(rep(intercept, nobs),
+    #                                            dimnames = list(NULL, "intercept"),
+    #                                            ncol = 1)),
+    #                    B = list(matrix(c(air_temperature_c,
+    #                                      water_temperature_c,
+    #                                      delta_at_01c_min),
+    #                                    dimnames = list(c("b_at",
+    #                                                      "b_wt",
+    #                                                      "b_dat"),
+    #                                                    NULL),
+    #                                    nrow = 3)),
+    #                    sigma = list(matrix(rep(sigma, nobs),
+    #                                        dimnames = list(NULL, "sigma"),
+    #                                        ncol = 1))),
+    #                by = .(water_sn, baro_sn, replication)]
+    #   
+    #   
+    #   testing_mat <- 
+    #     combined_data$testing[, .(S = list(matrix(sample_time, 
+    #                                               dimnames = list(NULL, "sample_time"),
+    #                                               ncol = 1)), 
+    #                               X = list(matrix(c(air_temperature_c, 
+    #                                                 water_temperature_c, 
+    #                                                 delta_at_01c_min), 
+    #                                               dimnames = list(NULL, c("air_temperature_c", 
+    #                                                                       "water_temperature_c", 
+    #                                                                       "delta_at_01c_min")),
+    #                                               ncol = 3)),
+    #                               nobs = .N),
+    #                           by = .(water_sn, baro_sn)]
+    #   
+    #   
+    #   test_pred <- 
+    #     testing_mat[pred_mat, on = c("water_sn", "baro_sn")]
+    #   
+    #   # This will provide prediction intervals for E_hat, removing sigma will provide
+    #   # confidence intervals for E_hat (when quantiles are taken)
+    #   # https://stackoverflow.com/questions/10584009/confidence-intervals-on-predictions-for-a-bayesian-linear-regression-model/10590067#10590067
+    #   # may be able to add a column of 1s to x and get rid of i
+    #   test_pred[, E_hat := Map(function(x, i, b, s){
+    #                             y_hat <- i + x %*% b
+    #                             matrix(rnorm(nrow(i), y_hat, s), 
+    #                                     dimnames = list(NULL, "predicted_error_cm"))
+    #             }, X, intercept, B, sigma)]
+    #   
+    #   setkey(test_pred, "water_sn", "baro_sn")
+    #   
+    #   predictions <-
+    #     combined_data$testing[, .(water_sn,
+    #                               baro_sn,
+    #                               sample_time,
+    #                               predicted_error_cm = NA_real_,
+    #                               lower_bound_cm = NA_real_,
+    #                               upper_bound_cm = NA_real_)]
+    #   
+    #   setkey(predictions, "water_sn", "baro_sn", "sample_time")
+    #   
+    #   pb <- 
+    #     txtProgressBar(min = 0, max = 36)
+    #   
+    #   c <- 0
+    #   
+    #   for(i in unique(test_pred$water_sn)){
+    #     for(j in unique(test_pred$baro_sn)){
+    #       post_pred <- 
+    #         test_pred[CJ(i,j), 
+    #                   c(list(water_sn = water_sn, baro_sn = baro_sn),
+    #                     lapply(.SD, function(x){do.call(rbind, x)})),
+    #                   .SDcols = c("S", "E_hat")]
+    #       
+    #       setnames(post_pred,
+    #                names(post_pred),
+    #                sub("^.*\\.", "", names(post_pred)))
+    #       
+    #       post_pred[, sample_time := as.POSIXct(sample_time, tz = "EST5EDT", 
+    #                                             origin = "1970-01-01")]
+    #       
+    #       write_fst(post_pred,
+    #                 path = paste0("output/tabular/bootstrap_predictions_test_data.df/",
+    #                               i, "_", j, ".fst"))
+    #       
+    #       ints <-
+    #         post_pred[, .(pred_lwr = quantile(predicted_error_cm, probs = 0.025),
+    #                       fit = quantile(predicted_error_cm, probs = 0.5),
+    #                       pred_upr = quantile(predicted_error_cm, probs = 0.975)),
+    #                   keyby = .(water_sn, baro_sn, sample_time)]
+    #       
+    #       predictions[ints,
+    #                   `:=`(predicted_error_cm = fit,
+    #                        lower_bound_cm = pred_lwr,
+    #                        upper_bound_cm = pred_upr)]
+    #       
+    #       rm(post_pred, ints)
+    #       
+    #       c <- c + 1
+    #       
+    #       setTxtProgressBar(pb, c)
+    #     }
+    #   }
+    #   
+    #   rm(testing_mat, test_pred, pred_mat)
+    #   
+    #   setkey(combined_data$testing, "water_sn", "baro_sn", "sample_time")
+    #   setkey(predictions, "water_sn", "baro_sn", "sample_time")
+    #   
+    #   predictions[combined_data$testing,
+    #               `:=`(experiment = i.experiment,
+    #                    water_depth_cm = i.water_depth_cm,
+    #                    raw_water_level_cm = i.raw_water_level_cm,
+    #                    raw_error_cm = i.raw_error_cm,
+    #                    instrument_error_cm = i.instrument_error_cm)][]
+    # }
+    
+    # ggplot(bootstrap_models$coefficients[term == "air_temperature_c"],
+    #        aes(x = estimate,
+    #            y = water_sn, 
+    #            fill = baro_sn)) + 
+    #   stat_halfeye(alpha = 0.5)
+    # ggplot(bootstrap_models$fit_metrics, 
+    #        aes(x = rmse, 
+    #            y = water_sn, 
+    #            fill = baro_sn)) + 
+    #   stat_halfeye(alpha = 0.5)
     
     # Compensate Water Levels -------------------------------------------------
     
