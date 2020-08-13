@@ -40,16 +40,19 @@ header-includes:
 # https://publications.agu.org/files/2019/02/January-14-2019-latex-templates.zip
 ---
 
-```{r echo=FALSE}
-library(drake)
-library(data.table)
+```{r setup, echo=FALSE, message = FALSE, warning = FALSE}
+
+source("/home/jpshanno/Documents/Levellogger_Correction/code/levellogger_packages.R")
+source("/home/jpshanno/Documents/Levellogger_Correction/code/levellogger_functions.R")
 # Some recommended settings. 
 knitr::opts_chunk$set(
-  echo = FALSE,
-  fig.pos = 'h',
-  out.extra = "",   # To force the use of figure enviroment
-  fig.cap = "Please caption every figure"
+	fig.cap = "Please caption every figure",
+	fig.pos = "h",
+	include = FALSE,
+	out.extra = ""
 )
+loadd(combined_data)
+loadd(bootstrap_models)
 ```
 
 ```{r keypoints_check, echo=FALSE, results='asis', eval = TRUE}
@@ -171,42 +174,46 @@ data when examining diurnal signals. Many studies have relied on the diurnal
 signal in well water levels and streamflow to estimate evapotranspiration and
 groundwater flow [@carlsonmazur-2014;
 @kirchner-2009; @loheide-2005; @mclaughlin-2014; @watras-2017; @white-1932].
-Ignoring errors in diurnal signals will lead to additional skewed results as the
-initial inaccuracies compound. Therefore, correcting for temperature-induced
-errors is essential to ensure that the observed fluctuations are real and not an
-artifact. Cuevas [-@cuevas-2010] and Gribovszki [-@gribovszki-2013] do validate
-their measurements with manual readings over the course of at least one 24-hour
-period. To be fully effective in field studies, these types of diurnal
-fluctuation validations would have to happen across the range of temperature and
-evapotranspiration/groundwater measurements throughout the monitoring period.
-This is often unfeasible for reasons related, but not limited to, budget,
-logistics, and safety. This leaves laboratory-derived compensation equations as
-the best alternative option, as recommended by Moore [-@moore-2016] and Liu
-[-@liu-2015].
+Without accounting for total uncertainty analysis of diurnal signals will lead
+to skewed results as the initial inaccuracies compound. Therefore, quantifying
+and correcting for temperature-induced errors is essential to ensure that the
+observed fluctuations are real and not an artifact. Cuevas [-@cuevas-2010] and
+Gribovszki [-@gribovszki-2013] do validate their measurements with manual
+readings over the course of at least one 24-hour period. To be fully effective
+in field studies, these types of diurnal fluctuation validations would have to
+happen across the range of temperature and evapotranspiration/groundwater
+measurements throughout the monitoring period. This is often unfeasible for
+reasons related, but not limited to, budget, logistics, and safety. This leaves
+laboratory-derived compensation equations as the best alternative option, as
+recommended by Moore [-@moore-2016] and Liu [-@liu-2015].
 
-While compensation equations can provide more assurance that observed diurnal
-signals are real, they introduce addtional error beyond instrument accuracy,
-that should be considered in the estimate of total measurement uncertainty. No
-studies to date examining the combined impact of instrument error and
-compensation equation uncertainty have been carried out to estimate the full
-uncertainty of measurements. In order to assess the validity of diurnal signals
-within water level measurements, any uncertainty in correcting the intra- and
-inter-transducer artifacts, should be propagated through to the final water
-level record. Such propagated uncertainty will provide a detection limit for
-true diurnal signals. Without additional validation (through manual measurements
-or other instrumentation), diurnal patterns below this detection limit must be
-considered artifacts. As such we suggest that estimates of diurnal signal should
-be analyzed as a left-censored dataset, with the detection limit determined by
-the specifics of instrumentation and compensation equations.
+Previous work has focused on the role of laboratory-derived compensation 
+equations in correcting for temperature-derived errors in water level measurements.
+These equations also provide two other opportunities. They can be used to 
+generate more robust accuracy ranges for uncorrected data, and they can be used
+to create narrower accuracy ranges than instrument accuracy alone. The former
+is an important consideration when quantifying diurnal signals. Any diurnal 
+signal that is less than the full uncertainty range of the instrument accuracy
+and temperature-driven errors must be considered suspect and indistinguishable
+from noise. Without additional validation (through manual measurements
+or other instrumentation), diurnal patterns below this detection limit would be
+considered artifacts, and estimates of such diurnal signals should
+be analyzed as left-censored datasets. Inversely, a validated compensation equation, 
+developed under the same conditions as monitoring, could be used to improve 
+estimates of uncertainty. By validating the compensation equation on an 
+independent dataset a new accuracy range can be determined and used for 
+corrected datasets. With a well constructed compensation equation these will 
+shrink the uncertainty bounds and allow for analysis of more precise diurnal
+signals.
 
 In this note we present a lab experiment to isolate and correct the separate
 impacts of transducer response to water and air temperatures. We demonstrate how
 these effects may mask one another resulting in water level errors within the
 range of instrument error. We present the corrected and uncorrected water levels
 on a test set of laboratory data at as well representative data from an ongoing
-hydrologic field study. Finally we calculate the propagated uncertainty, compare
-this to instrument error, and evaluate both against published diurnal water
-level fluctuations.
+hydrologic field study. Finally we calculate the propagated uncertainty for 
+common transducer deployment conditions, compare this to instrument error, and 
+evaluate both against published diurnal water level fluctuations.
 
 # Materials and Methods
 
@@ -214,19 +221,21 @@ level fluctuations.
 
 ### Laboratory Data
 
-We have conducted a five day-long experiment recording constant water levels 
+We have conducted a five day-long experiment recording constant water levels
 using absolute pressure transducers in four thermal settings to determine the
 impact of varying water and air temperatures, and temperature difference. The
 thermal settings represent a fully crossed design with stable and variable
-temperatures and similar and dissimilar air and water thermal regimes. Eighteen
-pressure transducers of varying age and model, all manufactured by Solinst, Ltd.
-(Georgetown, ON, Canada), were used to record water levels
-(Table \@ref(tab:loggers)). Two of these transducers, both Solinst Levellogger Juniors,
-were used to monitor barometric pressure. All instruments contained an absolute
-pressure transducer, temperature sensor, and on-board data logging. These loggers
-also provide internal temperature compensation of pressure measurements. 
+temperatures and similar and dissimilar air and water thermal regimes, with two
+periods of variable, dissimilar conditions (Table
+\@ref(tab:experiments)). Eighteen pressure transducers of varying age and model,
+all manufactured by Solinst, Ltd. (Georgetown, ON, Canada), were used to record
+water levels (Table \@ref(tab:loggers)). Two of these transducers, both Solinst
+Levellogger Juniors, were used to monitor barometric pressure. All instruments
+contained an absolute pressure transducer, temperature sensor, and on-board data
+logging. These loggers also provide internal temperature compensation of
+pressure measurements.
 
-```{r experiments, eval = FALSE}
+```{r experiments}
 experiments <- 
   data.table(Experiment = c("stat-sim", "stat-dis", "var-sim", "var-dis", "test-data"),
              Temperature = c("Stable", "Stable", "Variable", "Variable", "Variable"),
@@ -309,8 +318,8 @@ minus the absolute air pressure ($L = P_w - P_a$). Water level error
 depth.
 
 To perform compensation without utilizing a reference pressure, a multivariate
-linear model was fit for each pair of water and air transducers using LASSO 
-regularization [@kuhn-2013]. The 36 models took the form
+linear model was fit for each pair of water and air transducers using ordinary
+least squares. The 36 models took the form
 
 \begin{equation}
 \epsilon_L=\beta_0 + \beta_aT_a + \beta_wT_w + \beta_{\Delta T_a}\Delta T_a
@@ -319,21 +328,7 @@ regularization [@kuhn-2013]. The 36 models took the form
 
 where $T_a$, $T_w$, and $\Delta T_a$ represent air temperature, water temperature,
 and change in air temperature respectively. The units of $\Delta T_a$ are set as $0.01^oC\;min^{-1}$ to place them on the same scale as $\epsilon_L$ $T_a$, 
-and $T_w$. LASSO regularization penalizes model fits with large $\B$ values by
-minimizing the loss function. The penalty parameter $\lambda$ was determined by
-running 100 10-fold cross-validation simulations for each model and extracting
-the value $\lambda$ that minimized the RSME of the model. The mean of the 100
-$\lambda$ values was used as the final parameter in each model. This approach
-was taken because of instability in single estiamtes of $\lambda$ for these
-models.
-** could simplify this model to OLS if LASSO payoff isn't enough for added complexity**
-
-For each water-air transducer pair the correct compensation model was used to
-predict the error ($\hat\epsilon_L$), which was used to compensate the recorded
-water levels such that $L_c = L - \hat\epsilon_L$.
-where $L_c$ denotes the compensated water level. Both $L$ and $L_c$ were then
-centered by subtracting the mean of $\epsilon_L$ and $\hat\epsilon_L$, 
-respectively.
+and $T_w$. 
 
 Equation \@ref{eq:comp-base} was fit to the observed data to evaluate the
 hypothesis of a single multivariate compensation equation derived from only from
@@ -342,7 +337,7 @@ temperature compensation models, Equation 2 was fit repeatedly using a two-stage
 parametric bootstrapping approach [@buonaccorsi-2010]. The two-stage boostrap 
 first samples the observed data with replacement to create a data set of equal
 size as the observations. For each coordinate ($Y, X_1, X_2, X_3$) an error is
-added to each term, drawn from a normal distrubtion cetnered on zero with 
+added to each term, drawn from a normal distrubtion centered on zero with 
 standard deviation equal to the
 known instrument error for each variable (Table \@ref{tab-loggers}). For each transducer pair 1000 models were run.
 
@@ -356,128 +351,180 @@ T_w^* = T_w + N(0, \sigma_T)\\
 (\#eq:comp-boot)
 \end{equation}
 
-where $^*$ denotes bootstrap samples plus instrument error.
+where $^*$ denotes bootstrap samples plus instrument error. Bootstrap models 
+were generated independently within each of the five experimental periods. Any
+slope parameters not significant at $\alpha = 0.05$ were removed and the model
+was refit, iteratively until only intercept and any significant predictors 
+remained. For
+uncertainty analysis each bootstrap model was used to predict $\epsilon_L$ for
+the observed samples. To evaluate compensation across conditions the bootstrap
+models generated for the *test-data* period were used to predict $\epsilo_L$ for
+all of the other experimental periods.
 
-Predicted values for the test data were generated for each model by sampling
-from a random distrubtion with mean equal to the expected value and a standard
-deviation equivalent to the square root of the mean square error of the model.
-$$\hat\epsilon_{L_i} \sim N(\tau_L, \sigma_{model})$$,
-where $$\hat\epsilon_{L_i}$$ is the predicted error for the _i_th record.
-The predicted error was taken as the median of all calcualted
-$\hat\epsilon_{L_i}$ with upper and lower credibile intervals taken as the 0.025
-and 0.975 quantiles of all calcualted $\hat\epsilon_{L_i}$. Total uncertainty
-was partitioned into instrument and compensation errors by subtracting the
-stated instrument uncertainty.
+For all predictions, values of $\epsilon_L$ were drawn from a normal
+distribution centered on the expected value of $\epsilon_L$ with a standard
+deviation equivalent to the residual standard error of the model (Equation
+\@ref{eq:estimated-error}. 
 
-**should probably look at running models with standardize = FALSE because I
-already have all of X on the same scale**
+\begin{equation}
+\hat\epsilon_{L_i} \sim N(\epsilon_L^*, \sigma_{model})
+(\#eq:estimated-error)
+\end{equation}
 
-**additionally set penalty.factor to zero for delta_at**
+where $\hat\epsilon_{L_i}$ is the predicted error for the _i_th record. 
+The median of all calcualted $\hat\epsilon_{L_i}$ was used as
+predicted error in analysis with upper and lower prediction intervals taken as
+the 0.025 and 0.975 quantiles of all calcualted $\hat\epsilon_{L_i}$.
+
+For each water-air transducer pair the correct compensation model was used to
+predict the error ($\hat\epsilon_L$), which was used to compensate the recorded
+water levels such that $L_c = L - \hat\epsilon_L$.
+where $L_c$ denotes the compensated water level. Both $L$ and $L_c$ were then
+centered by subtracting the mean of $\epsilon_L$ and $\hat\epsilon_L$, 
+respectively.
 
 ## Compensation Evaluation
 
-To ensure independent evaluation of compensation, the accuracy of the models were
-evaluated using the 4 days of data from each of the experimental periods described
-above. Compensation effectiveness was evaluated based on two criteria: number of
-recorded points which fell outside of the range of combined instrument errors
-($n_{\epsilon,i}$) and the median absolute deviation (MAD) from the true values 
-as a percentage of the true value. Effect of compensation was tested as the
-pairwise difference in estimated marginal means of the RMSE for corrected and 
-uncorrected data within a given experimental period. Additionally estimated 
-marginal means of the corrected data RMSE were compared across experimental 
-period.
+To ensure independent evaluation of the multivariate compensation equation, the
+the bootstrapped models from the *test-data* period were evaluated using data
+from the remaining 4 experimental periods. Compensation effectiveness was
+evaluated based on two criteria: number of recorded points which fell outside of
+the range of combined instrument errors ($n_{\epsilon,i}$) and the root mean
+squared error (RMSE) from the known water depth. Effect of compensation was 
+tested as the pairwise difference in estimated marginal means of the RMSE for 
+corrected and uncorrected data within a given experimental period. Additionally 
+estimated marginal means of the corrected data RMSE were compared across 
+experimental period.
 
-The purpose of developing transducer compensations is to correct field-collected
-data where true water level is unknown except for a relatively small collection
-of manual calibration reading. Representative data from
+Often the purpose of developing transducer compensations is to correct
+field-collected data where true water level is unknown except for a relatively
+small collection of manual calibration readings. Representative data from
 ongoing field research using these same instruments is evaluated using raw and
 compensated water levels. As true water depth was known for so few of the
-recorded water level measurements, $n_{\epsilon,i}$ and MAD were not calculated.
-Rather key charactersitics of the resulting time series, magnitude of the 
-diurnal fluctuation, timing of water level peaks and drawdown, and daily summary
-statistics, are compared. These metrics were chosen to illustrate the impact of
-compensation on common metrics used in reported hydrologic data.
+recorded water level measurements, $n_{\epsilon,i}$ and RMSE were not
+calculated. Rather key charactersitics of the resulting time series, magnitude
+of the diurnal fluctuation, timing of water level peaks and drawdown, and daily
+summary statistics, are compared. These metrics were chosen to illustrate the
+impact of compensation on common metrics used in reported hydrologic data.
+
+## Uncertainty Analysis
+
+The impact of temperature-derived errors on water level measurements was 
+evaluated by comparing instrument error, propagated error, and measured error of
+corrected data. Within each experimental period the magnitude of instrument 
+error and propagated error from the bootstrap prediction bounds were compared
+using a t-test between the instrument error and propagated error. Using the 
+*test-dat* dataset, $\hat\epsilon_L$ was calculated as above, and the difference
+between the corrected water level and true water depth was used to calculate new
+accuracy bounds. The new accuracy bounds were then tested against the instrument
+error bounds using a paired t-test of the standard deviation of the propagated
+errors and the stated instrument accuracy.
 
 ## Software
 All data processing and analysis was performed in R [@rcoreteam-2019] using the
 packages `data.table` [@dowle-2019] for data manipulation, `ggplot2`
-[@wickham-2016] and `patchwork` [@pedersen-2019a] for visualization, `fixest`
-[@berge-2018] for linear models, and `httr` [@wickham-2019a] for Mesonet API
-access and caching. The `drake` [@landau-2018], `rmarkdown` [@allaire-2020;
-@xie-2018], `rticles` [@allaire-2019], and `rbbt` [@dunnington-2020] packages
-were used to generate a reproducible project and publication.
-
+[@wickham-2016] and `patchwork` [@pedersen-2019a] for visualization. The `drake`
+[@landau-2018], `rmarkdown` [@allaire-2020; @xie-2018], `rticles` 
+[@allaire-2019], and `rbbt` [@dunnington-2020] packages were used to generate a 
+reproducible project and publication.
 
 # Results
 
-## Compensation
-All of the thirty-six final models fit using Equation \@ref{eq:comp-base}
-showed a good fit to the data ($R^2$ __paste("$", round(mean(mods$r2), 2),
-"\\pm", round(sd(mods$r2)/sqrt(length(mods$r2)), 3), "$")__). Root-mean squared
-errors for the models ranged from #### to #### cm. The bootstrap predictions 
-had RMSE values that ranged from #### to #### cm, which includes the uncertainty
-inherent in the uncertainty of instrument measurements. The RMSE relative to 
-true water level showed a mean change of -0.001, -0.058, 0.042 <-- was 0.075 with OLS ->>, and 
--0.612 <-- was -0.673 with OLS --> cm within the _stat-sim_, _stat_dis_, _var-sim_, and
-_var-dis_ experimental periods. The reduction in RMSE for the _stat-dis_ and 
-_var-dis_ period were significant at the $\alpha=0.05$ level, as was the increase
-in RMSE in the _var-sim_ period. When the two water pressure transducers that 
-showed outlier model performance (2025928 & 2030899, Figure #### (RMSE or Sigma plot)) 
-the increase in RMSE in the _var-sim_ period was reduced to -0.018 and was no
-longer significant **Could potentially go into conclusions**. The number of 
-transducer pairs with points that fell outside of the instrument error range 
-followed similar patterns to the RMSE results (Table).
+## Compensation Effectiveness
+The model form described in Equation \@ref{eq:comp-base} showed a good fit to
+the *test-data* data with bootstrapped estimates of R^2 ranging from #### to
+####. The bootstrap predictions had RMSE values that ranged from #### to ####
+cm, which includes the uncertainty inherent in the instrument measurements. When
+the *test-data* model was used to predict other experimental periods, the RMSE
+relative to true water level showed a mean change of -0.001, -0.058, 0.042, and
+-0.614 cm within the _stat-sim_, _stat_dis_, _var-sim_, and _var-dis_
+experimental periods respectively. The reduction in RMSE for the _stat-dis_ and
+_var-dis_ period were significant at the $\alpha=0.05$ level, as was the
+increase in RMSE in the _var-sim_ period. When the two water pressure
+transducers that showed outlier model performance (2025928 & 2030899, Figure
+#### (RMSE or Sigma plot)) the increase in RMSE in the _var-sim_ period was
+reduced to -0.018 and was no longer significant.
 
-Prior to compensation #### +/- ##### points fell outside of the 95% confidence
-band defined by the true water level +/- qnorm(0.975) times the combined
-instrument errors of the barometric and water pressure transducers. Following
-compensation #### points fell outside of that same confidence band. When the
-interval is expanded to include to instrument uncertainty and the temperature
-compensation #### and #### points of the raw and compensated data, respectively,
-fell outside the interval.
+Prior to compensation 0 to 57% of measured points fell outside of the 95%
+confidence band defined by the combined stated instrument accuracies of the
+barometric and water pressure transducers, with only the *var-dis* period
+showing more than 1% outside of the error range (Table \@ref(tab:oor)).
+Following compensation only 6% of *var-dis* points fell outside of that same
+confidence band, but small increases of points outside of the band were observed
+for *var-sim* and *stat-sim*. When the interval is expanded to include to
+instrument uncertainty and the errors associated with temperature artifacts only
+*var-dis* showed any raw data points (35%) outside of the expanded error band.
+Following compensation this fell to 0.35% of points for *var-dis* but increased
+from 0-0.3% for *var-sim*. All rectified points that fell outside of the
+instrument and propogated error bands were associated with the two abnormal
+loggers mentioned above.
 
 ```{r oor}
 
-drake::loadd(predicted)
+predictions <- 
+  fread("output/tabular/bootstrap_prediction_values.csv")
 
-predicted[, `:=`(raw_ooir = !between(raw_water_level_cm, 
-                                     water_depth_cm - qnorm(0.975) * instrument_error_cm,
-                                     water_depth_cm + qnorm(0.975) * instrument_error_cm),
-                   rect_ooir = !between(rect_water_level_cm, 
-                                       water_depth_cm - qnorm(0.975) * instrument_error_cm,
-                                       water_depth_cm + qnorm(0.975) * instrument_error_cm),
-                   raw_oopr = !between(raw_water_level_cm, 
-                                      water_depth_cm - (predicted_error_cm - lower_bound_cm),
-                                      water_depth_cm + (upper_bound_cm - predicted_error_cm)),
-                   rect_oopr = !between(rect_water_level_cm, 
-                                       water_depth_cm - (predicted_error_cm - lower_bound_cm),
-                                       water_depth_cm + (upper_bound_cm - predicted_error_cm)))]
+predictions[, `:=`(raw_ooir = raw_water_level_cm < instrument_lower | raw_water_level_cm > instrument_upper, 
+                 rect_ooir = rect_water_level_cm < instrument_lower | rect_water_level_cm > instrument_upper,
+                 raw_oopr = raw_water_level_cm < propagated_lower | raw_water_level_cm > propagated_upper, 
+                 rect_oopr = rect_water_level_cm < propagated_lower | rect_water_level_cm > propagated_upper)]
 
 oor_summary <- 
-  predicted[, lapply(.SD, sum),
+  predictions[, lapply(.SD, sum),
               by = .(water_sn, baro_sn, experiment),
               .SDcols = patterns("_oo")]
 
 oor_count <- 
-  oor_summary[, lapply(.SD, sum), by = .(experiment), 
-              .SDcols = patterns("(w|t)_oo")]
+  oor_summary[, lapply(.SD, sum), by = .(experiment),
+              .SDcols = patterns("_oo")]
 
-oor_percent <- 
-  oor_count[combined_data$testing[, .N, by = .(experiment)], 
+oor_percent_all_points <-
+  oor_count[combined_data$testing[, .N, by = .(experiment)],
             N := i.N,
-            on = "experiment"][, lapply(.SD, `/`, N), 
+            on = "experiment"][, lapply(.SD, function(x) 100 * x / N),
                                by = .(experiment),
                                .SDcols = patterns("(w|t)_oo")]
 
-knitr::kable(experiments,
+knitr::kable(setNames(oor_percent_all_points, c(" ", "Raw", "Rectified", "Raw", "Rectified")) ,
              align = "c",
-             caption = "Description of experimental conditions.")
+             # format = "latex",
+             caption = "Percentage of observations of raw and corrected water levels falling outside of instrument accuracy range and propoaged error range (both at $\alpha=0.05$.") %>% 
+  kableExtra::add_header_above(header = c("Experimental Period" = 1, "Instrument Error" = 2, "Propogated Error" = 2))
 
 ```
 
-
-
 ## Uncertainty Analysis
+
+Instrument accuracy for all models was either `paste(unique(combined_data$testing$instrument_error_cm), collapse = ", or ")`,
+with one of the three transducer models having greater stated accuracy (Table
+\@ref(tab:loggers)). 
+
+Due to large discrepancies in model accuracy between the barometric transducers
+we compared the propagated errors and the instrument errors separately for each
+set of 18 models. For transducer 1066019 the propagated errors were found to be 
+significantly less than the instrument error (mean increase in accuracy = 0.17cm).
+Transducer 1065861 was found to have propagated errors that were significantly
+higher than instrument error (mean decrease in accuracy = 0.05cm).
+
+```{r}
+vardis <- predictions[experiment == "var-dis"]
+vardis[, propagated_error_cm := rect_water_level_cm - water_depth_cm]
+vardis_errors <- 
+  vardis[, .(propagated_error_cm = sd(propagated_error_cm),
+             instrument_error_cm = mean(instrument_error_cm)), 
+         by = .(water_sn, baro_sn)]
+
+lapply(split(vardis_errors, by = "baro_sn"),
+       function(x){
+         t.test(x$propagated_error_cm, 
+                x$instrument_error_cm, 
+                # alternative = "less", 
+                paired = TRUE)
+       }
+)
+
+```
+
 
 We saw that the different thermal regimes in the experiments could still be 
 explained by a single unified model.
@@ -497,24 +544,11 @@ water level error using temperature difference would disregard the differential
 transducer responses. By using the models developed in this study it is possible
 to look at the impact of considering temperature differential relative to 
 absolute temperature. Figure ### shows the result of simulating errors using a 
-fixed water temperature and varying air temperature, and fixed temperatuer 
+fixed water temperature and varying air temperature, and fixed temperature 
 differential between varying air and water temperatures. We can see that the
 two sources of errors move in opposite directions, and in general the effect of
 air temperature along is much larger than the effect of a moving temperature 
 differential window. 
-
-We also showed that it is possible to correct water-depth derived from two
-pressure transducers without the need to reference to an external data source.
-Any transducer compensation approach must be a trade-off between convenience,
-absolute accuracy, and uncertainty. The described approach to compensation
-achieves accuracy that corrects most data to within the bounds instrument error.
-It can be performed with at a monitoring location with little to no extra
-equipment. By minimizing the number of models required for compensation the
-multivariate constant water-depth approach also reduces the uncertainty added to
-the final water depth measurement. A similar error reduction was performed using
-external barometric data and correcting each transducer type separately (data
-not shown). These data showed a similar improvement in accuracy but with added
-uncertainty from additional compensation models and additional instrument error.
 
 Both @cain-2004 and @liu-2015 recommend that lab-based compensation equations be
 developed for deployed transducers. Building upon that we have demonstrated that
@@ -568,6 +602,20 @@ water measurements. If multiple loggers are not available for simultanous
 compensation performing preliminary or post-correction checks against and
 external data source is necessary to account for any errors.
 
+We also showed that it is possible to correct water-depth derived from two
+pressure transducers without the need to reference to an external data source.
+Any transducer compensation approach must be a trade-off between convenience,
+absolute accuracy, and uncertainty. The described approach to compensation
+achieves accuracy that corrects 90% of erroneous data to within the bounds 
+instrument error and almost all data to within the propagated error bounds.
+It can be performed with at a monitoring location with little to no extra
+equipment. By minimizing the number of models required for compensation the
+multivariate constant water-depth approach also reduces the uncertainty added to
+the final water depth measurement. A similar error reduction was performed using
+external barometric data and correcting each transducer type separately (data
+not shown). These data showed a similar improvement in accuracy but with added
+uncertainty from additional compensation models and additional instrument error.
+
 Regularization penalizes variabiles with large slopes. This results in models
 that are less prone to overfitting and to being driven entirely by a single
 variable. It also has the effective of making the models less sensitive to
@@ -586,6 +634,24 @@ water transducers are placed in similar thermal regimes, regardless of available
 compensation approaches. However, compensation approaches are a critical tool 
 for correcting previous monitoring data that may not have subscribed to best 
 practices, or when it is unknown if deployment followed best practices.
+
+```{r intercept_mods}
+i_mods <- 
+  bootstrap_models[, .(experiment, N = as.numeric(pmax(abs(air_temperature_c), abs(water_temperature_c), abs(delta_at_01c_min)) == 0), sigma)][, .(mean = mean(N), se = sqrt(var(N)/.N), sigma = median(.SD[N > 0, sigma])), keyby = .(experiment)]
+
+imods <- 
+  as.list(setNames(100 * set_errors(i_mods$mean, i_mods$se), i_mods$experiment))
+```
+
+Of the 1000 models fit per experimental period, `r imods[["stat-sim"]]`% of
+*stat-sim*, `r imods[["stat-dis"]]`% of *stat-dis*, and `r imods[["var-sim"]]`%
+of *var-sim* final models were intercept-only. These models showed no significant
+relationship with air temperature, water temperature, or rate of change of air
+temperature. The error associated with 
+these models still provides important information regarding true instrument
+accuracy. The median value for residual standard deviation for intercept only 
+models was 0.32, which is higher than the stated instrument error of any of the
+transducer pairs. 
 
 ## The Role of Uncertainty in Water Level Measurements
 We found that under certain conditions water level errors exceeded instrument
