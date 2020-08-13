@@ -668,12 +668,16 @@ generate_lambda_min <-
                         lambda = c(10^seq(3, -6, by = -.1), 0))$lambda.min)
   }
 
-rmse <- 
-  function(y_hat, y){
-    sqrt(mean((y_hat - y)^2))
-  }
+# rmse <- 
+#   function(y_hat, y){
+#     sqrt(mean((y_hat - y)^2))
+#   }
 
 adjusted_r2 <- 
   function(y_hat, y, nobs, k){
-    1 - (1-cor(y_hat, y)) * (nobs - 1) / (nobs - k - 1)
+    if(isTRUE(all.equal(as.numeric(y_hat), as.numeric(y), check.atributes = FALSE))){
+      return(0)
+    }
+    
+    1 - (1-cor(y_hat, y)^2) * (nobs - 1) / (nobs - k - 1)
   }
