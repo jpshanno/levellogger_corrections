@@ -660,3 +660,65 @@ error_type_mod <-
   lm(value ~ variable*experiment, data = unc_dat)
 
 emmeans(error_type_mod, pairwise ~ variable | experiment, adjust = "bonferroni")
+
+
+
+# Error Drivers -----------------------------------------------------------
+
+slopes <- 
+  setnames(dcast(bootstrap_models$coefficients[, 
+                                               .(estimate = median(estimate)), 
+                                               by = .(water_sn, baro_sn, term)], 
+                 baro_sn + water_sn ~ term,
+                 value.var = "estimate"),
+           c("(Intercept)", "air_temperature_c", "delta_at_01c_min", "water_temperature_c"),
+           c("i", "b_at", "b_dat", "b_wt"))[order(water_sn, baro_sn)]
+
+# 2030899 is the only logger with a large negative slope to water. This was one
+# of the two models that needed an mcp model in the previous approach. The other
+# two loggers with negative slopes are 2064734 and 1062528. In var-sim after the
+# effect of air temperature and delta_at are removed the remaining error shows
+# a positive relationship to water_temp. Maybe there was an air bubble?
+
+ggplot(combined_data$training[water_sn %in% c("2064734", "1062528", "2030899")],
+       aes(x = water_temperature_c,
+           y = raw_error_cm)) + 
+  geom_point() +
+  geom_point(data = combined_data$training[!(water_sn %in% c("2064734", "1062528", "2030899"))],
+             color = "red") +
+  facet_wrap(~water_sn, scales = "free")
+
+
+driver_dat <- 
+  Reduce(rbind, combined_data)
+
+driver_dat[slopes,
+           `:=`(effect_air_temp = b_at * air_temperature_c,
+                effect_water_temp = b_wt * water_temperature_c,
+                effect_delta_at = b_dat * delta_at_01c_min),
+           on = c("water_sn", "baro_sn")]
+
+dy_graph(driver_dat[water_sn == "2030899" & baro_sn == "1066019"], effect_air_temp, effect_water_temp, effect_delta_at)
+
+
+ggplot(driver_dat[experiment == "var-sim" & water_sn %in% c("2064734", "1062528", "2030899")],
+       aes(x = water_temperature_c,
+           y = raw_error_cm - effect_air_temp - effect_delta_at)) + 
+  geom_point() +
+  geom_point(data = driver_dat[!(water_sn %in% c("2064734", "1062528", "2030899"))],
+             color = "red") +
+  facet_wrap(~water_sn, scales = "free")
+
+ggplot(driver_dat[water_sn %in% c("2030899")],
+       aes(x = water_temperature_c,
+           y = raw_error_cm - effect_air_temp - effect_delta_at)) + 
+  geom_point() +
+  facet_wrap(~experiment, scales = "free_y")
+
+dy_graph(driver_dat[!(water_sn %in% c("2064734", "1062528")) & baro_sn == "1066019"], 
+         "raw_error_cm", 
+         grouping = "water_sn")
+
+driver_dat[baro_sn == "1066019" & water_sn %in% c("2064734", "1062528", "2030899")] %>% 
+  .[, test := raw_error_cm - effect_air_temp - effect_delta_at] %>% 
+  dy_graph("test", grouping = "water_sn")
