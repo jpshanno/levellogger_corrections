@@ -130,10 +130,10 @@ mods <-
                  
                
                models[[i]] <- 
-                 list(model_coefficients = data.table(model_id, 
+                 list(mod_summary = data.table(model_id, 
                                                rep = i, 
                                                tidy(mod)),
-                      model_measures = data.table(model_id, 
+                      mod_fit = data.table(model_id, 
                                            rep = i, 
                                            sigma = sigma(mod), 
                                            adj_r2,
@@ -530,15 +530,6 @@ predictions[, `:=`(raw_water_level_cm = raw_water_level_cm - mean(raw_water_leve
                    rect_water_level_cm = rect_water_level_cm - mean(rect_water_level_cm - water_depth_cm)),
             by = .(water_sn, baro_sn, experiment)]
 
-mad_values <- 
-  melt(predictions[, lapply(.SD, function(x) mad(x - water_depth_cm)), 
-            by = .(water_sn, baro_sn, experiment),
-            .SDcols = c("raw_water_level_cm", "rect_water_level_cm")], 
-       id.vars = c("water_sn", "baro_sn", "experiment"),
-       measure.vars = c("raw_water_level_cm", "rect_water_level_cm"),
-       variable.name = "type", 
-       value.name = "mad_cm")
-
 rmse_values <- 
   melt(predictions[, lapply(.SD, function(x) sqrt(mean((x - water_depth_cm)^2))), 
                    by = .(water_sn, baro_sn, experiment),
@@ -559,46 +550,56 @@ ggplot(rmse_values,
   stat_gradientinterval() +
   facet_wrap(~baro_sn)
 
+# Run with [!(water_sn %in% c("2025928", "2030899"))] shows no significant change
+# in var-sim
+
 rmse_mod <- 
   lm(rmse_cm ~ type*experiment, data = rmse_values)
 
-emmeans(rmse_mod, pairwise ~ type | experiment, adjust = "bonferroni")
+rmse_mod_reduced <- 
+  lm(rmse_cm ~ type*experiment, data = rmse_values[!(water_sn %in% c("2025928", "2030899"))])
 
-predictions[, `:=`(raw_ooir = !between(raw_water_level_cm, 
-                                     water_depth_cm - qnorm(0.975) * instrument_error_cm,
-                                     water_depth_cm + qnorm(0.975) * instrument_error_cm),
-                   rect_ooir = !between(rect_water_level_cm, 
-                                       water_depth_cm - qnorm(0.975) * instrument_error_cm,
-                                       water_depth_cm + qnorm(0.975) * instrument_error_cm),
-                   raw_oopr = !between(raw_water_level_cm, 
-                                      water_depth_cm - (predicted_error_cm - lower_bound_cm),
-                                      water_depth_cm + (upper_bound_cm - predicted_error_cm)),
-                   rect_oopr = !between(rect_water_level_cm, 
-                                       water_depth_cm - (predicted_error_cm - lower_bound_cm),
-                                       water_depth_cm + (upper_bound_cm - predicted_error_cm)))]
+emmeans(rmse_mod, pairwise ~ type | experiment, adjust = "bonferroni")$contrasts
+emmeans(rmse_mod_reduced, pairwise ~ type | experiment, adjust = "bonferroni")$contrasts
 
-ooir_mod <- 
-  glm(value ~ variable*experiment,
-      family = binomial,
-     data = melt(predictions, id.vars = c("water_sn", "baro_sn", "sample_time", "experiment"),
-                 measure.vars = c("raw_ooir", "rect_ooir")))
 
-emmeans(ooir_mod, pairwise ~ variable | experiment, adjust = "bonferroni")
+predictions[, `:=`(raw_ooir = raw_water_level_cm < instrument_lower | raw_water_level_cm > instrument_upper, 
+                 rect_ooir = rect_water_level_cm < instrument_lower | rect_water_level_cm > instrument_upper,
+                 raw_oopr = raw_water_level_cm < propagated_lower | raw_water_level_cm > propagated_upper, 
+                 rect_oopr = rect_water_level_cm < propagated_lower | rect_water_level_cm > propagated_upper)]
 
 oor_summary <- 
   predictions[, lapply(.SD, sum),
               by = .(water_sn, baro_sn, experiment),
               .SDcols = patterns("_oo")]
 
+oor_count <- 
+  oor_summary[, lapply(.SD, sum), by = .(experiment), 
+              .SDcols = patterns("(w|t)_oo")]
+
+oor_count
+oor_summary[!(water_sn %in% c("2025928", "2030899")), lapply(.SD, sum), by = .(experiment), 
+            .SDcols = patterns("(w|t)_oo")]
+
+# Percent all points
+oor_count[combined_data$testing[, .N, by = .(experiment)],
+          N := i.N,
+          on = "experiment"][, lapply(.SD, function(x) 100 * x / N),
+                             by = .(experiment),
+                             .SDcols = patterns("(w|t)_oo")]
+
+# Percent all points without problem loggers
+oor_summary[!(water_sn %in% c("2025928", "2030899")), lapply(.SD, sum), by = .(experiment), 
+            .SDcols = patterns("(w|t)_oo")][combined_data$testing[!(water_sn %in% c("2025928", "2030899")), .N, by = .(experiment)],
+                                            N := i.N,
+                                            on = "experiment"][, lapply(.SD, function(x) 100 * x / N),
+                                                               by = .(experiment),
+                                                               .SDcols = patterns("(w|t)_oo")]
 
 
-oor_summary[, lapply(.SD, sum), by = .(experiment), 
-            .SDcols = patterns("(w|t)_oo")][
-              testing_data[, .N, by = .(experiment)], 
-              N := i.N,
-              on = "experiment"][, lapply(.SD, `/`, N), 
-                                 by = .(experiment),
-                                 .SDcols = patterns("(w|t)_oo")]
+oor_count[, .(experiment,
+                change_in_ooir = 100 * (rect_ooir - raw_ooir) / raw_ooir,
+                change_in_oopr = 100 * (rect_oopr - raw_oopr) / raw_oopr)]
 
 oor_summary[, `:=`(delta_ooir = rect_ooir - raw_ooir,
                    delta_oopr = rect_oopr - raw_oopr)]
@@ -616,7 +617,7 @@ ggplot(oor_summary[oor_summary$rect_ooir != 0 & oor_summary$raw_ooir != 0],
 
 hist(oor_summary$delta_ooir[oor_summary$rect_ooir != 0 & oor_summary$raw_ooir != 0], nclass = 144)
 
-ggplot(data = predictions[experiment == "var-dis"],
+ggplot(data = predictions[experiment == "var-sim"],
        aes(x = sample_time,
            y = rect_water_level_cm)) +
   geom_ribbon(aes(ymin = water_depth_cm - (predicted_error_cm - lower_bound_cm),
@@ -625,12 +626,14 @@ ggplot(data = predictions[experiment == "var-dis"],
   geom_ribbon(aes(ymin = water_depth_cm - (qnorm(0.975) * instrument_error_cm),
                   ymax = water_depth_cm + qnorm(0.975) * instrument_error_cm),
               fill = "gray80") + 
-  geom_line(aes(color = baro_sn)) +
+  geom_line() +
   geom_line(aes(y = raw_water_level_cm,
                 color = baro_sn),
             linetype = "dotted") +
   geom_line(aes(y = water_depth_cm)) +
-  facet_wrap(~ water_sn, scales = "free")
+  # geom_point(data = predictions[experiment == "var-sim" & !rect_oopr],
+  #            col = "red") +
+  facet_wrap(~ water_sn + baro_sn, scales = "free")
 
 mod <- 
   lm(raw_error_cm ~ air_temperature_c + water_temperature_c + delta_at_01c_min, 
