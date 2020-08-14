@@ -1,3 +1,4 @@
+library(multcomp)
 library(drake)
 library(purrr)
 library(data.table)

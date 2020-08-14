@@ -370,8 +370,8 @@ plan <-
     
     # ggplot(bootstrap_models$coefficients[term == "air_temperature_c"],
     #        aes(x = estimate,
-    #            y = water_sn, 
-    #            fill = baro_sn)) + 
+    #            y = water_sn,
+    #            fill = baro_sn)) +
     #   stat_halfeye(alpha = 0.5)
     # ggplot(bootstrap_models$fit_metrics, 
     #        aes(x = rmse, 
