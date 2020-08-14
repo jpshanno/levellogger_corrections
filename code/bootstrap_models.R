@@ -617,7 +617,7 @@ ggplot(oor_summary[oor_summary$rect_ooir != 0 & oor_summary$raw_ooir != 0],
 
 hist(oor_summary$delta_ooir[oor_summary$rect_ooir != 0 & oor_summary$raw_ooir != 0], nclass = 144)
 
-ggplot(data = predictions[experiment == "var-sim"],
+ggplot(data = predictions[experiment == "var-dis" & water_sn == "1062534" & baro_sn == "1066019"],
        aes(x = sample_time,
            y = rect_water_level_cm)) +
   geom_ribbon(aes(ymin = water_depth_cm - (predicted_error_cm - lower_bound_cm),

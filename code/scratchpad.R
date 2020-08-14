@@ -1,7 +1,7 @@
 as.numeric(st_distance(st_sfc(st_point(c(-88.58083, 47.092)), st_point(c(-88.5742812, 47.119242)), crs = "+proj=longlat +datum=WGS84"))[1,2]/1000)`
 
 source("code/levellogger_packages.R"); source("code/levellogger_functions.R")
-loadd(raw_water_data, levellogger_measurements, mesonet_response, raw_barometric_data)
+loadd(combined_data, bootstrap_models)
 
 theme_set(ggthemes::theme_few())
 brown_green_scale <- # Inspired by NOAA maps
@@ -17,6 +17,107 @@ pale_pal <-
     blue = "#5982A0",
     purple = "#966283",
     red = "#9B5249")
+
+
+predictors <- 
+  dcast(rbind(model_fits[, .(model_id, water_sn, baro_sn, rep, term = "sigma", estimate = sigma)], 
+              model_summaries[, .(model_id, water_sn, baro_sn, rep, term, estimate)], 
+              fill = TRUE),
+        model_id + water_sn + baro_sn + rep ~ term,
+        value.var = "estimate")
+
+# predictors <- 
+#   predictors[, lapply(.SD, rep, 4)]
+# 
+# predictors[, experiment := rep(unique(testing_data$experiment), each = nrow(predictors)/4)]
+
+predictors[, `:=`(water_sn = as.character(water_sn),
+                  baro_sn = as.character(baro_sn))]
+
+predictors[testing_data[, .(nobs = .N), by = .(water_sn, baro_sn)],
+           nobs := nobs,
+           on = c("water_sn", "baro_sn")]
+
+setnames(predictors, 
+         c("(Intercept)", "rep"),
+         c("intercept", "replication"))
+
+predictors[, `:=`(air_temperature_c = nafill(air_temperature_c, "const", 0),
+                  water_temperature_c = nafill(water_temperature_c, "const", 0),
+                  delta_at_01c_min = nafill(delta_at_01c_min, "const", 0))]
+
+pred_mat <- 
+  predictors[, .(intercept = list(matrix(rep(intercept, nobs),
+                                         dimnames = list(NULL, "intercept"),
+                                         ncol = 1)),
+                 B = list(matrix(c(air_temperature_c,
+                                   water_temperature_c,
+                                   delta_at_01c_min),
+                                 dimnames = list(c("b_at",
+                                                   "b_wt",
+                                                   "b_dat"),
+                                                 NULL),
+                                 nrow = 3)),
+                 sigma = list(matrix(rep(sigma, nobs),
+                                     dimnames = list(NULL, "sigma"),
+                                     ncol = 1))),
+             by = .(water_sn, baro_sn, replication)]
+
+test_pred <- 
+  testing_mat[pred_mat, on = c("water_sn", "baro_sn")]
+
+# This will provide prediction intervals for E_hat, removing sigma will provide
+# confidence intervals for E_hat (when quantiles are taken)
+# https://stackoverflow.com/questions/10584009/confidence-intervals-on-predictions-for-a-bayesian-linear-regression-model/10590067#10590067
+test_pred[, E_hat := Map(function(x, i, b, s){
+  y_hat <- i + x %*% b
+  matrix(rnorm(nrow(i), y_hat, s), 
+         dimnames = list(NULL, "predicted_error_cm"))
+}, X, intercept, B, sigma)]
+
+setkey(test_pred, "water_sn", "baro_sn")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Old Corrections ---------------------------------------------------------
+
+loadd(raw_water_data, levellogger_measurements, mesonet_response, raw_barometric_data)
+
 
 f3311 <- mesonet_response[station == "F3311"]
 f3311[, ex_pressure_error_cm := 2.7625 / qnorm(0.99)]
@@ -1155,7 +1256,9 @@ comp_dat <-
         allow.cartesian = TRUE,
         by = "sample_time") %>% 
   .[, `:=`(delta_wt_c_min = c(NA_real_, diff(water_temperature_c)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins"))),
-           delta_at_c_min = c(NA_real_, diff(air_temperature_c)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins")))),
+           delta_wp_cm_min = c(NA_real_, diff(raw_water_pressure_cm)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins"))),
+           delta_at_c_min = c(NA_real_, diff(air_temperature_c)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins"))),
+           delta_ap_cm_min = c(NA_real_, diff(raw_air_pressure_cm)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins")))),
     by = .(water_sn, baro_sn)]  %>% 
   set_experiments("data/experimental_design.csv")
 
