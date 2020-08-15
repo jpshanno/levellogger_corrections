@@ -21,239 +21,52 @@
 # It also shows up looking at baro_error ~ air_temperature for KCMX vs F3311. 
 # Weirdly it appears in just 1065861
 
+# Load Data ---------------------------------------------------------------
+# The air pressure loggers were found wet at the end of the var-sim
+# experiment. After looking at the data extensively I determined that it 
+# must have fallen into the water at approximately 6:00 on 6/10/2020. The 
+# clearest way to see this was too look at a plot of water level error by 
+# water_temperature for just the var-sim experiment. Look at the plot in
+# output/figures/problem-baro-plot.png made using corrected air pressures.
+# with uncorrected water pressures. I compared that figure to one made with
+# the Mesonet altimeter data and found that the artifacts were removed
+
 plan <- 
   drake_plan(
     
-    # Load Data ---------------------------------------------------------------
-    # The air pressure loggers were found wet at the end of the var-sim
-    # experiment. After looking at the data extensively I determined that it 
-    # must have fallen into the water at approximately 6:00 on 6/10/2020. The 
-    # clearest way to see this was too look at a plot of water level error by 
-    # water_temperature for just the var-sim experiment. Look at the plot in
-    # output/figures/problem-baro-plot.png made using corrected air pressures.
-    # with uncorrected water pressures. I compared that figure to one made with
-    # the Mesonet altimeter data and found that the artifacts were removed
-    
+    # Read in manual measurements of cable length and water depth
     levellogger_measurements = 
-      fread(file_in("data/levellogger_measurements.csv"),
-            colClasses = c("character", "character", "integer", "numeric", "numeric")),
+      read_manual_measurements(file_in("data/levellogger_measurements.csv")),
     
-    raw_water_data = 
-      read_xle_data(levellogger_measurements, "water"),
+    # Load xle data from water transducers
+    raw_water_data =
+      read_xle_data(levellogger_measurements, 
+                    "water"),
     
-    raw_barometric_data = 
-      read_xle_data(levellogger_measurements, "air") %>% 
-      .[!between(sample_time, 
-                 as.POSIXct("2020-06-10 06:00", tz = "EST5EDT"), 
-                 as.POSIXct("2020-06-10 12:30", tz = "EST5EDT"))] %>%
-      .[, `:=`(delta_t_c = c(NA_real_, diff(air_temperature_c)),
-               delta_p_cm = c(NA_real_, diff(air_pressure_cm)),
-               rolling_temp_c = frollmean(air_temperature_c, n = 720, align = "center"))],
+    # Load xle data from barometric transducers
+    raw_barometric_data =
+      read_xle_data(levellogger_measurements, 
+                    "air"),
     
-    instrument_metadata = 
-      get_metadata(raw_barometric_data, raw_water_data),
+    # L
+    instrument_metadata =
+      get_metadata(raw_barometric_data, 
+                   raw_water_data),
+     
+    combined_data = 
+      combine_datasets(raw_water_data, 
+                       raw_barometric_data, 
+                       levellogger_measurements, 
+                       file_in("data/experimental_design.csv")),
+                       
+    bootstrap_models = 
+      fit_models(combined_data),
+     
+    fitted = 
+      calculate_fitted_values(bootstrap_models, combined_data)
     
-    mesonet_response = 
-      fetch_external_baro(times = c(raw_barometric_data$sample_time)),
-    
-    combined_data = {
-      combined <- 
-        merge(raw_water_data[, .(water_sn = serial_number, sample_time, raw_water_pressure_cm = water_pressure_cm, dens_water_pressure_cm = 1000 * water_pressure_cm / water_density(water_temperature_c), water_temperature_c, water_error_cm = pressure_error_cm, water_temp_error_c = temperature_error_c)],
-              raw_barometric_data[, .(baro_sn = serial_number, sample_time, raw_air_pressure_cm = air_pressure_cm, dens_air_pressure_cm = 1000 * air_pressure_cm / water_density(air_temperature_c), air_temperature_c, air_error_cm = pressure_error_cm, air_temp_error_c = temperature_error_c)],
-              allow.cartesian = TRUE,
-              by = "sample_time")
-      
-      combined[levellogger_measurements, 
-               water_depth_cm := cable_length_cm - water_height_cm, 
-               on = c(water_sn = "serial_number")]
-      
-      combined[, `:=`(delta_wt_01c_min = 100 * c(NA_real_, diff(water_temperature_c)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins"))),
-                      delta_wp_cm_min = c(NA_real_, diff(raw_water_pressure_cm)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins"))),
-                      delta_at_01c_min = 100 * c(NA_real_, diff(air_temperature_c)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins"))),
-                      delta_at_error_01c_min = 100 * combine_errors(air_temp_error_c, air_temp_error_c),
-                      delta_ap_cm_min = c(NA_real_, diff(raw_air_pressure_cm)) / c(NA_real_, as.numeric(diff(sample_time, unit = "mins"))),
-                      instrument_error_cm = combine_errors(water_error_cm, air_error_cm),
-                      raw_water_level_cm = dens_water_pressure_cm - dens_air_pressure_cm,
-                      raw_error_cm = (dens_water_pressure_cm - dens_air_pressure_cm) - water_depth_cm),
-               by = .(water_sn, baro_sn)]
-        
-      combined <- 
-        set_experiments(combined, "data/experimental_design.csv")
-      
-      split(combined, by = "dataset")},
-    
-    lambdas =
-      find_optimal_lambda(combined_data[["training"]], 
-                          by = c("water_sn", "baro_sn"),
-                          n = 100),
-    
-    # Should break this step up to save the models and then save the fit info
-    # list as a separate target
-    
-    # Add samples to fit_metrics. Move lambda to fit_metrics
-    bootstrap_models = {
-      set.seed(1234)
-      
-      dat <- 
-        split(Reduce(rbind, combined_data),
-              by = c("water_sn", "baro_sn", "experiment"))
-      
-      mods <- mclapply(dat, 
-                     function(x){
-                       
-                       i <- 1L
-                       
-                       reps <- 
-                         1000L
-                       
-                       # models <- 
-                       #   vector("list", 2)
-                       
-                       wsn <- 
-                         unique(x$water_sn)
-                       
-                       bsn <- 
-                         unique(x$baro_sn)
-                       
-                       model_id <- 
-                         paste(wsn, bsn, unique(x$experiment), sep = "_")
-                       
-                       nobs <- 
-                         nrow(x)
-                       
-                       models <- 
-                         data.table(model_id, # = rep(model_id, reps), 
-                                    rep = 1:reps,
-                                    nobs = nobs,
-                                    intercept = NA_real_,
-                                    air_temperature_c = NA_real_,
-                                    water_temperature_c = NA_real_,
-                                    delta_at_01c_min = NA_real_, 
-                                    sigma = NA_real_,
-                                    adj_r2 = NA_real_,
-                                    rmse = NA_real_)
-                       
-                       # fit_cols <-
-                       #   names(models[, intercept:rmse])
-                       
-                       while(i < reps + 1){
-                         
-                         samples <- 
-                           sample.int(n = nobs, size = nobs, replace = TRUE)
-                         
-                         inst_err <- 
-                           rnorm(nobs, 0, x$instrument_error_cm)
-                         
-                         at_err <- 
-                           rnorm(nobs, 0, x$air_error_c)
-                         
-                         wt_err <- 
-                           rnorm(nobs, 0, x$water_error_c)
-                         
-                         d_at_err <- 
-                           rnorm(nobs, 0, x$delta_at_error_01c_min)
-                         
-                         Y <-
-                           matrix(x$raw_error_cm[samples] + inst_err,
-                                  ncol = 1,
-                                  dimnames = list(NULL, "raw_error_cm"))
-                         
-                         X <-
-                           matrix(c(rep(1, nobs),
-                                    x$air_temperature_c[samples] + at_err,
-                                    x$water_temperature_c[samples] + wt_err,
-                                    x$delta_at_01c_min[samples] + d_at_err),
-                                  nrow = nobs,
-                                  dimnames = list(NULL,
-                                                  c("intercept",
-                                                    "air_temperature_c",
-                                                    "water_temperature_c",
-                                                    "delta_at_01c_min")))
-                         
-                         p_B <- rep(999, 4)
-                         
-                         while(!all(p_B <= 0.05)){
-                         
-                           # Remove non-significant variables
-                           X <- 
-                             X[, which(p_B <= 0.05 | p_B == 999), drop = FALSE]
-                           
-                           # https://web.stanford.edu/~mrosenfe/soc_meth_proj3/matrix_OLS_NYU_notes.pdf
-                           XX <- 
-                             solve(crossprod(X))
-                           
-                           B <- 
-                             XX %*% t(X) %*% Y
-                           
-                           fits <- 
-                             X %*% B
-                           
-                           k <- 
-                             nrow(B) - 1
-                           
-                           adj_r2 <- 
-                             as.numeric(adjusted_r2(fits, Y, nobs, k))
-                           
-                           rs <- 
-                             (fits - Y)^2
-                           
-                           rss <- 
-                             sum(rs)
-                           
-                           rmse <- 
-                             sqrt(mean(rs))
-                           
-                           df <- 
-                             (nobs - k - 1)
-                           
-                           sigma <- 
-                             sqrt(rss / df)
-                           
-                           # https://stats.stackexchange.com/questions/44838/how-are-the-standard-errors-of-coefficients-calculated-in-a-regression
-                           se_B <- 
-                             sqrt(diag(sigma^2 * XX))
-                           
-                           p_B <- 
-                             c(intercept = 0, (2*(1 - pt(abs(B / se_B), df)))[-c(1), ])
-                           
-                           # B <- 
-                           #   B * as.numeric(p_B <= 0.05)
-                           
-                         }
-                         
-                         write_fst(data.table(model_id, rep = i, samples, inst_err, at_err, wt_err, d_at_err),
-                                   paste0("output/models/bootstrap_samples/", model_id, "_", i, ".fst"))
-                         
-                         model_fit <- 
-                           setNames(c(t(B), sigma, adj_r2, rmse),
-                                    c(rownames(B), "sigma", "adj_r2", "rmse"))
-                         
-                         for(I in names(model_fit)){
-                           set(models, i, I, model_fit[[I]])
-                         }
-                         # 
-                         # models[i, ] <- 
-                         #   c(model_id, i, model_fit)
-                         # 
-                         # models[[i]] <- 
-                         #   list(coefficients = data.table(model_id, 
-                         #                                  rep = i, 
-                         #                                  t(B), 
-                         #                                  sigma,
-                         #                                  adj_r2,
-                         #                                  rmse))
-                         
-                         i <- i + 1L
-                       }
-                       models[, `:=`(air_temperature_c = nafill(air_temperature_c, "const", 0),
-                                     water_temperature_c = nafill(water_temperature_c, "const", 0),
-                                     delta_at_01c_min = nafill(delta_at_01c_min, "const", 0))]
-                     }
-                     
-      )
-      
-      rbindlist(mods)[, c("water_sn", "baro_sn", "experiment") := tstrsplit(model_id, split = "_")][]
-    }
+    # predicted =
+    #   calculate_predicted_values(boostrap_models, combined_data)
     
     # All models predicted for their own data
     # uncertainty_rdses =   
