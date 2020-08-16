@@ -369,7 +369,7 @@ calculate_fitted_values <-
       for(j in unique(dat$baro_sn)){
         post_pred <-
           dat[CJ(i,j),
-              c(list(water_sn = water_sn, baro_sn = baro_sn, experiment = experiment),
+              c(list(water_sn = water_sn, baro_sn = baro_sn, experiment = experiment, rep = rep),
                 lapply(.SD, function(x){do.call(rbind, x)})),
               .SDcols = c("S", "E_hat")]
         
@@ -519,7 +519,7 @@ calculate_predicted_values <-
         for(j in unique(dat$baro_sn)){
           post_pred <-
             dat[CJ(i,j),
-                c(list(water_sn = water_sn, baro_sn = baro_sn, experiment = experiment),
+                c(list(water_sn = water_sn, baro_sn = baro_sn, experiment = experiment, rep = rep),
                   lapply(.SD, function(x){do.call(rbind, x)})),
                 .SDcols = c("S", "E_hat")]
           
@@ -619,7 +619,7 @@ create_drivers_panel <-
       labs(x = expression(paste("Water Temperature, ", degree, "C")),
            y = "Raw Error minus Air Temperature Effect, cm")
     
-    fig1a + fig1b + fig1c + plot_annotation(tag_levels = "A")
+    {fig1a + fig1b + fig1c + plot_annotation(tag_levels = "A")}
   }
 
 
