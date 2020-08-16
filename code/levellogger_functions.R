@@ -425,6 +425,204 @@ calculate_fitted_values <-
   predictions
 }
 
+calculate_predicted_values <- 
+  function(models, data) {
+    
+    data <- 
+      data$testing
+    
+    pred_mat <-
+      models[experiment == "test-dat", 
+             .(B = list(matrix(c(intercept,
+                                 air_temperature_c,
+                                 water_temperature_c,
+                                 delta_at_01c_min),
+                               dimnames = list(c("i",
+                                                 "b_at",
+                                                 "b_wt",
+                                                 "b_dat"),
+                                               NULL),
+                               nrow = 4)),
+               sigma),
+             by = .(water_sn, baro_sn, rep)]
+    
+    setkey(pred_mat, water_sn, baro_sn)
+    
+    x_mat <-
+      data[,  .(S = list(matrix(sample_time,
+                                dimnames = list(NULL, "sample_time"),
+                                ncol = 1)),
+                X = list(matrix(c(rep(1, .N),
+                                  air_temperature_c,
+                                  water_temperature_c,
+                                  delta_at_01c_min),
+                                dimnames = list(NULL, c("intercept",
+                                                        "air_temperature_c",
+                                                        "water_temperature_c",
+                                                        "delta_at_01c_min")),
+                                ncol = 4))),
+           keyby = .(water_sn, baro_sn, experiment)]
+    
+    predictions <-
+      data[, .(water_sn,
+               baro_sn,
+               experiment,
+               sample_time,
+               predicted_error_cm = NA_real_,
+               lower_bound_cm = NA_real_,
+               upper_bound_cm = NA_real_)]
+    
+    setkey(predictions, "water_sn", "baro_sn", "experiment", "sample_time")
+    
+    # Keep the for loops. Unnesting all of these predictions very quickly runs
+    # out of memory. It would probably be possible to fix it with careful joining
+    # and unnesting, but this works
+    
+    pb <-
+      txtProgressBar(min = 0, max = 36)
+    
+    c <- 0
+    
+    for(Ex in c("stat-sim", "stat-dis", "var-sim", "var-dis")){
+      
+      dat <- 
+        x_mat[experiment == Ex]
+      
+      x_mat <- 
+        x_mat[experiment != Ex]
+      
+      gc()
+      
+      dat[pred_mat,
+          `:=`(B = i.B,
+               sigma = i.sigma)]
+      
+      dat[, sigma := Map(function(s, x){matrix(rep(s, nrow(x)), 
+                                               dimnames = list(NULL, "sigma"), 
+                                               ncol = 1)}, 
+                         s = sigma, 
+                         x = X)]
+
+      dat[, E_hat := Map(function(x, b, s){matrix(rnorm(n = nrow(x),
+                                                        mean = x %*% b,
+                                                        sd = s),
+                                                  ncol = 1,
+                                                  dimnames = list(NULL,
+                                                                  "predicted_error_cm"))},
+                         x = X,
+                         b = B,
+                         s = sigma)]
+      
+      setkey(dat, "water_sn", "baro_sn", "experiment")
+      
+      for(i in unique(dat$water_sn)){
+        for(j in unique(dat$baro_sn)){
+          post_pred <-
+            dat[CJ(i,j),
+                c(list(water_sn = water_sn, baro_sn = baro_sn, experiment = experiment),
+                  lapply(.SD, function(x){do.call(rbind, x)})),
+                .SDcols = c("S", "E_hat")]
+          
+          setnames(post_pred,
+                   names(post_pred),
+                   sub("^.*\\.", "", names(post_pred)))
+          
+          post_pred[, sample_time := as.POSIXct(sample_time, tz = "EST5EDT",
+                                                origin = "1970-01-01")]
+          
+          write_fst(post_pred,
+                    path = paste0("output/tabular/bootstrap_predict_values.df/",
+                                  i, "_", j, "_", Ex, ".fst"))
+          
+          ints <-
+            post_pred[, .(pred_lwr = quantile(predicted_error_cm, probs = 0.025),
+                          fit = quantile(predicted_error_cm, probs = 0.5),
+                          pred_upr = quantile(predicted_error_cm, probs = 0.975)),
+                      keyby = .(water_sn, baro_sn, experiment, sample_time)]
+          
+          predictions[ints,
+                      `:=`(predicted_error_cm = fit,
+                           lower_bound_cm = pred_lwr,
+                           upper_bound_cm = pred_upr)]
+          
+          c <- c + 1/36
+          
+          setTxtProgressBar(pb, c)
+        }
+      }
+      
+      setkey(data, "water_sn", "baro_sn", "experiment", "sample_time")
+      setkey(predictions, "water_sn", "baro_sn", "experiment", "sample_time")
+      
+      predictions[data,
+                  `:=`(water_depth_cm = i.water_depth_cm,
+                       raw_water_level_cm = i.raw_water_level_cm,
+                       raw_error_cm = i.raw_error_cm,
+                       instrument_error_cm = i.instrument_error_cm)]
+      
+      predictions[, rect_water_level_cm := raw_water_level_cm - predicted_error_cm]
+      predictions[, `:=`(centered_water_level_cm = raw_water_level_cm - mean(raw_water_level_cm - water_depth_cm),
+                         rect_water_level_cm = rect_water_level_cm - mean(rect_water_level_cm - water_depth_cm)),
+                  by = .(water_sn, baro_sn, experiment)]
+      
+      # Weird problem where between() (data.table or dplyr) was returning TRUE when FALSE
+      predictions[, `:=`(instrument_lower = water_depth_cm - qnorm(0.975) * instrument_error_cm,
+                         instrument_upper = water_depth_cm + qnorm(0.975) * instrument_error_cm,
+                         propagated_lower = water_depth_cm - (predicted_error_cm - lower_bound_cm),
+                         propagated_upper = water_depth_cm + (upper_bound_cm - predicted_error_cm))][]
+    }
+    
+    predictions
+  }
+
+create_drivers_panel <- 
+  function(data){
+    
+    dat_1 <- 
+      data$testing[experiment == "var-dis" & baro_sn == "1066019" & water_sn == "1062452"]
+    
+    fig1a <- 
+      ggplot(dat_1,
+             aes(x = air_temperature_c,
+                 y = raw_error_cm)) + 
+      geom_point(color = "#329985") +
+      geom_smooth(method = "lm",
+                  formula = "y~x",
+                  se = FALSE,
+                  color = "black") +
+      labs(x = expression(paste("Air Temperature, ", degree, "C")),
+           y = "Raw Error, cm")
+    
+    fig1b <- 
+      ggplot(dat_1,
+             aes(x = water_temperature_c,
+                 y = raw_error_cm,
+                 color = baro_sn)) + 
+      geom_point(color = "#329985") +
+      geom_smooth(method = "lm",
+                  formula = "y~x",
+                  se = FALSE,
+                  color = "black") +
+      labs(x = expression(paste("Water Temperature, ", degree, "C")),
+           y = "Raw Error, cm")
+    
+    fig1c <- 
+      ggplot(dat_1,
+             aes(x = water_temperature_c,
+                 y = raw_error_cm - fitted(lm(raw_error_cm ~ air_temperature_c + delta_at_01c_min, data = dat_1)),
+                 color = baro_sn)) + 
+      geom_point(color = "#329985") +
+      geom_smooth(method = "lm",
+                  formula = "y~x",
+                  se = FALSE,
+                  color = "black") +
+      labs(x = expression(paste("Water Temperature, ", degree, "C")),
+           y = "Raw Error minus Air Temperature Effect, cm")
+    
+    fig1a + fig1b + fig1c + plot_annotation(tag_levels = "A")
+  }
+
+
 # Helper Functions --------------------------------------------------------
 
 
@@ -922,8 +1120,18 @@ adjust_density <-
     pressure.cm * 1000 / water_density(temperature.c)
   }
 
+
 set_experiments <- 
   function(data, design.file){
+    # The air pressure loggers were found wet at the end of the var-sim
+    # experiment. After looking at the data extensively I determined that it 
+    # must have fallen into the water at approximately 6:00 on 6/10/2020. The 
+    # clearest way to see this was too look at a plot of water level error by 
+    # water_temperature for just the var-sim experiment. Look at the plot in
+    # output/figures/problem-baro-plot.png made using corrected air pressures.
+    # with uncorrected water pressures. I compared that figure to one made with
+    # the Mesonet altimeter data and found that the artifacts were removed
+    
     design <- 
       fread(design.file)
     
