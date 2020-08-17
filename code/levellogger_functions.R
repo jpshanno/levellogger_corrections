@@ -155,7 +155,7 @@ fit_models <-
                        
                        models <- 
                          data.table(model_id, # = rep(model_id, reps), 
-                                    rep = 1:reps,
+                                    model_rep = 1:reps,
                                     nobs = nobs,
                                     intercept = NA_real_,
                                     air_temperature_c = NA_real_,
@@ -253,11 +253,11 @@ fit_models <-
                            
                          }
                          
-                         # fwrite(x = data.table(model_id, rep = i, samples, inst_err, at_err, wt_err, d_at_err),
+                         # fwrite(x = data.table(model_id, model_rep = i, samples, inst_err, at_err, wt_err, d_at_err),
                          #        file = "output/tabular/bootstrap_samples_and_errors.csv",
                          #        append = TRUE)
                           
-                         write_fst(x = data.table(model_id, rep = i, samples, inst_err, at_err, wt_err, d_at_err),
+                         write_fst(x = data.table(model_id, model_rep = i, samples, inst_err, at_err, wt_err, d_at_err),
                                    path = paste0("output/models/bootstrap_samples.df/", model_id, "_", i, ".fst"),
                                    compress = 100)
                          
@@ -284,149 +284,147 @@ fit_models <-
 calculate_fitted_values <- 
   function(models, data) {
   
-  data <- 
-    Reduce(rbind, data)
+    cat("\nCalculating Fitted Values\n")
   
-  pred_mat <-
-    models[, .(B = list(matrix(c(intercept,
-                                 air_temperature_c,
-                                 water_temperature_c,
-                                 delta_at_01c_min),
-                               dimnames = list(c("i",
-                                                 "b_at",
-                                                 "b_wt",
-                                                 "b_dat"),
-                                               NULL),
-                               nrow = 4)),
-               sigma = list(matrix(rep(sigma, nobs),
-                                   dimnames = list(NULL, "sigma"),
-                                   ncol = 1))),
-           keyby = .(water_sn, baro_sn, experiment, rep)]
-  
-  x_mat <-data[,  .(S = list(matrix(sample_time,
-                                    dimnames = list(NULL, "sample_time"),
-                                    ncol = 1)),
-                    X = list(matrix(c(rep(1, .N),
-                                      air_temperature_c,
-                                      water_temperature_c,
-                                      delta_at_01c_min),
-                                    dimnames = list(NULL, c("intercept",
-                                                            "air_temperature_c",
-                                                            "water_temperature_c",
-                                                            "delta_at_01c_min")),
-                                    ncol = 4))),
-               keyby = .(water_sn, baro_sn, experiment)]
-  
-  predictions <-
-    data[, .(water_sn,
-             baro_sn,
-             experiment,
-             sample_time,
-             predicted_error_cm = NA_real_,
-             lower_bound_cm = NA_real_,
-             upper_bound_cm = NA_real_)]
-  
-  setkey(predictions, "water_sn", "baro_sn", "experiment", "sample_time")
-  
-  # Keep the for loops. Unnesting all of these predictions very quickly runs
-  # out of memory. It would probably be possible to fix it with careful joining
-  # and unnesting, but this works
-  
-  pb <-
-    txtProgressBar(min = 0, max = 5 * 36)
-  
-  c <- 0
-  
-  for(Ex in EXPERIMENTS){
+    data <- 
+      Reduce(rbind, data)
     
-    dat <- 
-      pred_mat[experiment == Ex]
+    pred_mat <-
+      models[, .(B = list(matrix(c(intercept,
+                                   air_temperature_c,
+                                   water_temperature_c,
+                                   delta_at_01c_min),
+                                 dimnames = list(c("i",
+                                                   "b_at",
+                                                   "b_wt",
+                                                   "b_dat"),
+                                                 NULL),
+                                 nrow = 4)),
+                 sigma = list(matrix(rep(sigma, nobs),
+                                     dimnames = list(NULL, "sigma"),
+                                     ncol = 1))),
+             keyby = .(water_sn, baro_sn, experiment, model_rep)]
     
-    pred_mat <- 
-      pred_mat[experiment != Ex]
+    x_mat <-
+      data[,  .(S = list(matrix(sample_time,
+                                dimnames = list(NULL, "sample_time"),
+                                ncol = 1)),
+                X = list(matrix(c(rep(1, .N),
+                                  air_temperature_c,
+                                  water_temperature_c,
+                                  delta_at_01c_min),
+                                dimnames = list(NULL, c("intercept",
+                                                        "air_temperature_c",
+                                                        "water_temperature_c",
+                                                        "delta_at_01c_min")),
+                                ncol = 4))),
+           keyby = .(water_sn, baro_sn, experiment)]
     
-    gc()
+    predictions <-
+      data[, .(water_sn,
+               baro_sn,
+               experiment,
+               sample_time,
+               predicted_error_cm = NA_real_,
+               lower_bound_cm = NA_real_,
+               upper_bound_cm = NA_real_)]
     
-    dat[x_mat,
-        `:=`(S = i.S,
-             X = i.X)]
-    
-    dat[, E_hat := Map(function(x, b, s){matrix(rnorm(n = nrow(x),
-                                                      mean = x %*% b,
-                                                      sd = s),
-                                                ncol = 1,
-                                                dimnames = list(NULL,
-                                                                "predicted_error_cm"))},
-                       x = X,
-                       b = B,
-                       s = sigma)]
-    
-    # saveRDS(dat, fit_matrix_files()[Ex])
-    
-    setkey(dat, "water_sn", "baro_sn", "experiment")
-    
-    for(i in unique(dat$water_sn)){
-      for(j in unique(dat$baro_sn)){
-        post_pred <-
-          dat[CJ(i,j),
-              c(list(water_sn = water_sn, baro_sn = baro_sn, experiment = experiment, rep = rep),
-                lapply(.SD, function(x){do.call(rbind, x)})),
-              .SDcols = c("S", "E_hat")]
-        
-        setnames(post_pred,
-                 names(post_pred),
-                 sub("^.*\\.", "", names(post_pred)))
-        
-        post_pred[, sample_time := as.POSIXct(sample_time, tz = "EST5EDT",
-                                              origin = "1970-01-01")]
-        
-        write_fst(post_pred,
-                  path = paste0("output/tabular/bootstrap_fit_values.df/",
-                                i, "_", j, "_", Ex, ".fst"))
-        
-        ints <-
-          post_pred[, .(pred_lwr = quantile(predicted_error_cm, probs = 0.025),
-                        fit = quantile(predicted_error_cm, probs = 0.5),
-                        pred_upr = quantile(predicted_error_cm, probs = 0.975)),
-                    keyby = .(water_sn, baro_sn, experiment, sample_time)]
-        
-        predictions[ints,
-                    `:=`(predicted_error_cm = fit,
-                         lower_bound_cm = pred_lwr,
-                         upper_bound_cm = pred_upr)]
-        
-        c <- c + 1/36
-        
-        setTxtProgressBar(pb, c)
-      }
-    }
-    
-    setkey(data, "water_sn", "baro_sn", "experiment", "sample_time")
     setkey(predictions, "water_sn", "baro_sn", "experiment", "sample_time")
     
-    predictions[data,
-                `:=`(water_depth_cm = i.water_depth_cm,
-                     raw_water_level_cm = i.raw_water_level_cm,
-                     raw_error_cm = i.raw_error_cm,
-                     instrument_error_cm = i.instrument_error_cm)]
+    # Keep the for loops. Unnesting all of these predictions very quickly runs
+    # out of memory. It would probably be possible to fix it with careful joining
+    # and unnesting, but this works
     
-    predictions[, rect_water_level_cm := raw_water_level_cm - predicted_error_cm]
-    predictions[, `:=`(centered_water_level_cm = raw_water_level_cm - mean(raw_water_level_cm - water_depth_cm),
-                       rect_water_level_cm = rect_water_level_cm - mean(rect_water_level_cm - water_depth_cm)),
-                by = .(water_sn, baro_sn, experiment)]
+    pb <-
+      txtProgressBar(min = 0, max = 5 * 36)
     
-    # Weird problem where between() (data.table or dplyr) was returning TRUE when FALSE
-    predictions[, `:=`(instrument_lower = water_depth_cm - qnorm(0.975) * instrument_error_cm,
-                       instrument_upper = water_depth_cm + qnorm(0.975) * instrument_error_cm,
-                       propagated_lower = water_depth_cm - (predicted_error_cm - lower_bound_cm),
-                       propagated_upper = water_depth_cm + (upper_bound_cm - predicted_error_cm))][]
+    c <- 0
+    
+    for(Ex in unique(data$experiment)){
+      
+      dat <- 
+        pred_mat[experiment == Ex]
+      
+      pred_mat <- 
+        pred_mat[experiment != Ex]
+      
+      gc()
+      
+      dat[x_mat,
+          `:=`(S = i.S,
+               X = i.X)]
+      
+      dat[, E_hat := Map(function(x, b, s){matrix(rnorm(n = nrow(x),
+                                                        mean = x %*% b,
+                                                        sd = s),
+                                                  ncol = 1,
+                                                  dimnames = list(NULL,
+                                                                  "predicted_error_cm"))},
+                         x = X,
+                         b = B,
+                         s = sigma)]
+      
+      # saveRDS(dat, fit_matrix_files()[Ex])
+      
+      setkey(dat, "water_sn", "baro_sn", "experiment")
+      
+      for(i in unique(dat$water_sn)){
+        for(j in unique(dat$baro_sn)){
+          post_pred <-
+            dat[CJ(i,j),
+                .(sample_time = as.POSIXct(S[[1]][, 1], tz = "EST5EDT", origin = "1970-01-01"), 
+                  predicted_error_cm = E_hat[[1]][, 1]),
+                by = .(water_sn, baro_sn, experiment, model_rep)]
+          
+          write_fst(post_pred,
+                    path = paste0("output/tabular/bootstrap_fit_values.df/",
+                                  i, "_", j, "_", Ex, ".fst"))
+          
+          ints <-
+            post_pred[, .(pred_lwr = quantile(predicted_error_cm, probs = 0.025),
+                          fit = quantile(predicted_error_cm, probs = 0.5),
+                          pred_upr = quantile(predicted_error_cm, probs = 0.975)),
+                      keyby = .(water_sn, baro_sn, experiment, sample_time)]
+          
+          predictions[ints,
+                      `:=`(predicted_error_cm = fit,
+                           lower_bound_cm = pred_lwr,
+                           upper_bound_cm = pred_upr)]
+          
+          c <- c + 1/36
+          
+          setTxtProgressBar(pb, c)
+        }
+      }
+      
+      setkey(data, "water_sn", "baro_sn", "experiment", "sample_time")
+      setkey(predictions, "water_sn", "baro_sn", "experiment", "sample_time")
+      
+      predictions[data,
+                  `:=`(water_depth_cm = i.water_depth_cm,
+                       raw_water_level_cm = i.raw_water_level_cm,
+                       raw_error_cm = i.raw_error_cm,
+                       instrument_error_cm = i.instrument_error_cm)]
+      
+      predictions[, rect_water_level_cm := raw_water_level_cm - predicted_error_cm]
+      predictions[, `:=`(centered_water_level_cm = raw_water_level_cm - mean(raw_water_level_cm - water_depth_cm),
+                         rect_water_level_cm = rect_water_level_cm - mean(rect_water_level_cm - water_depth_cm)),
+                  by = .(water_sn, baro_sn, experiment)]
+      
+      # Weird problem where between() (data.table or dplyr) was returning TRUE when FALSE
+      predictions[, `:=`(instrument_lower = water_depth_cm - qnorm(0.975) * instrument_error_cm,
+                         instrument_upper = water_depth_cm + qnorm(0.975) * instrument_error_cm,
+                         propagated_lower = water_depth_cm - (predicted_error_cm - lower_bound_cm),
+                         propagated_upper = water_depth_cm + (upper_bound_cm - predicted_error_cm))][]
+    }
+    
+    predictions
   }
-  
-  predictions
-}
 
 calculate_predicted_values <- 
   function(models, data) {
+    
+    cat("\nCalculating Predicted Values\n")
     
     data <- 
       data$testing
@@ -444,7 +442,7 @@ calculate_predicted_values <-
                                                NULL),
                                nrow = 4)),
                sigma),
-             by = .(water_sn, baro_sn, rep)]
+             by = .(water_sn, baro_sn, model_rep)]
     
     setkey(pred_mat, water_sn, baro_sn)
     
@@ -483,7 +481,7 @@ calculate_predicted_values <-
     
     c <- 0
     
-    for(Ex in c("stat-sim", "stat-dis", "var-sim", "var-dis")){
+    for(Ex in unique(data$experiment)){
       
       dat <- 
         x_mat[experiment == Ex]
@@ -493,9 +491,8 @@ calculate_predicted_values <-
       
       gc()
       
-      dat[pred_mat,
-          `:=`(B = i.B,
-               sigma = i.sigma)]
+      dat <- 
+        dat[pred_mat]
       
       dat[, sigma := Map(function(s, x){matrix(rep(s, nrow(x)), 
                                                dimnames = list(NULL, "sigma"), 
@@ -519,16 +516,9 @@ calculate_predicted_values <-
         for(j in unique(dat$baro_sn)){
           post_pred <-
             dat[CJ(i,j),
-                c(list(water_sn = water_sn, baro_sn = baro_sn, experiment = experiment, rep = rep),
-                  lapply(.SD, function(x){do.call(rbind, x)})),
-                .SDcols = c("S", "E_hat")]
-          
-          setnames(post_pred,
-                   names(post_pred),
-                   sub("^.*\\.", "", names(post_pred)))
-          
-          post_pred[, sample_time := as.POSIXct(sample_time, tz = "EST5EDT",
-                                                origin = "1970-01-01")]
+                .(sample_time = as.POSIXct(S[[1]][, 1], tz = "EST5EDT", origin = "1970-01-01"), 
+                  predicted_error_cm = E_hat[[1]][, 1]),
+                by = .(water_sn, baro_sn, experiment, model_rep)]
           
           write_fst(post_pred,
                     path = paste0("output/tabular/bootstrap_predict_values.df/",
