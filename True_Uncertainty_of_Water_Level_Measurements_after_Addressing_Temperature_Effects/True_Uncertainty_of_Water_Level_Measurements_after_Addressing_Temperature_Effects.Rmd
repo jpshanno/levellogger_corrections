@@ -54,13 +54,12 @@ knitr::opts_chunk$set(
 	out.extra = "",
 	cache = FALSE
 )
-options(scipen=1, digits=2)
+print.default <- function(x,...){print.default(x, digits = 3,...)}
+options(scipen=1, digits=3)
 loadd(combined_data)
 loadd(bootstrap_models)
-predictions <- 
-  fread(here::here("output/tabular/bootstrap_prediction_values.csv"))
-uncertainty <- 
-  fread(here::here("output/tabular/bootstrap_predictions_uncertainty_test.csv"))
+loadd(predicted)
+loadd(fitted)
 ```
 
 ```{r keypoints_check, echo=FALSE, results='asis', eval = TRUE}
@@ -154,9 +153,9 @@ transducers, which suggests that errors in absolute transducers are unlikely to
 arise directly as a result of temperature difference. We present the alternative
 hypothesis that that perceived temperature difference error is the combination
 of individual transducer responses to water and air temperatures (Figure
-AAA). The out of phase variation in air temperature and water
+\@ref(fig:drivers-panel)). The out of phase variation in air temperature and water
 temperature result in the stronger gradient masking the effect of the weaker
-gradient. The sequential correction shown in Figure AAA
+gradient. The sequential correction shown in Figure \@ref(fig:drivers-panel)
 illustrates how both errors must be addressed. There are two possible approaches
 to the correction. Develop univariate corrections to some reference pressure
 measurement for each transducer, or develop a single multi-variate correction to
@@ -164,8 +163,11 @@ a known water depth for each pair of air and water transducers. By developing a
 single multi-variate correction we can avoid the need to determine a suitable 
 reference pressure measurement or utilize a pressure chamber.
 
-*Figure AAA Three panels showing error ~ air temperature, error ~ water temperature,
-and air-temperature-corrected error ~ water temperature*
+```{r drivers-panel, fig.cap="Error is driven by a combination of individual transducer errors, which can result in masking by the stronger trend. Panel A shows water level error as a function of air temperature, illustrating a strong linear trend. Panel B shows very little relationship between raw water level error and water temperature. Panel C is the relationship between error and water temperature after the influence of air temperature has been removed via OLS linear regression.", fig.asp=0.33, fig.height = 3}
+loadd(fig_drivers_panel)
+fig_drivers_panel
+
+```
 
 Implied in the above studies is additional error, beyond instrument accuracy,
 that should be considered in the estimate of total measurement uncertainty. It
@@ -332,7 +334,7 @@ temperature, and change in air temperature respectively. The units of $\Delta
 T_a$ are set as $0.01^oC\;min^{-1}$ to place them on the same scale as
 $\epsilon_L$ $T_a$, and $T_w$.
 
-Equation \@ref{eq:comp-base} was fit to the observed data to evaluate the
+Equation \@ref(eq:comp-base) was fit to the observed data to evaluate the
 hypothesis of a single multivariate compensation equation derived from only from
 known water depth. To account for the uncertainty of instrument error in the
 temperature compensation models, Equation 2 was fit repeatedly using a two-stage
@@ -341,7 +343,7 @@ first samples the observed data with replacement to create a data set of equal
 size as the observations. For each sampled coordinate ($Y, X_1, X_2, X_3$) error
 is added to each term, drawn from a normal distribution centered on zero with
 standard deviation equal to the known instrument error for each variable (Table
-\@ref{tab:loggers}). For each transducer pair 1000 models were run.
+\@ref(tab:loggers)). For each transducer pair 1000 models were run.
 
 $$\epsilon_L^* = \epsilon_L + N(0, \sigma_{L'});\;\sigma_{L'} = \sqrt{2\sigma_L^2}$$
 $$T_a^* = T_a + N(0, \sigma_T)$$
@@ -365,7 +367,7 @@ periods.
 For all predictions, recorded values of $\epsilon_L$ were drawn from a normal
 distribution centered on the expected value of $\epsilon_L$ with a standard
 deviation equivalent to the residual standard error of the model (Equation
-\@ref{eq:estimated-error}. 
+\@ref(eq:estimated-error)). 
 
 \begin{equation}
 \hat\epsilon_{L_i} \sim N(\epsilon_L^*, \sigma_{model})
@@ -376,11 +378,12 @@ where $\hat\epsilon_{L_i}$ is the predicted error for the _i_th record.
 For each sample record the median of all calculated $\hat\epsilon_{L_i}$ within
 an experimental period was used as predicted error in analysis with upper and
 lower prediction intervals taken as the 0.025 and 0.975 quantiles of all
-calculated $\hat\epsilon_{L_i}$.
+calculated $\hat\epsilon_{L_i}$ (Figure \@ref(fig:bootstrap-timeseries)).
 
-*Figure BBB: A line graph showing the predictions from about ~25 separate bootstrap
-models along with the final median prediction and uncertainty derived from all
-1000 models*
+```{r bootstrap-timeseries, fig.cap="An example of a single water-barometric transducer model used to correct water level. The dotted line represents the raw water level with errors. Each of the three colored lines represent a single bootstrap model and the solid black line is the median response from all 1000 models. Gray bands show the 95% condifence bands derived from the instrument error (dark gray) and propagated error (light gray). The expanded section shows the same series for a two hour period for clarity."}
+loadd(fig_bootstrap_timeseries)
+fig_bootstrap_timeseries
+```
 
 For each water-air transducer pair, the correct compensation model was used to
 predict the error ($\hat\epsilon_L$), which was used to compensate the recorded
@@ -444,11 +447,11 @@ reproducible project and publication.
 
 ```{r prediction-rmse}
 rmse_values <- 
-  melt(predictions[, lapply(.SD, function(x) sqrt(mean((x - water_depth_cm)^2))), 
+  melt(predicted[, lapply(.SD, function(x) sqrt(mean((x - water_depth_cm)^2))), 
                    by = .(water_sn, baro_sn, experiment),
-                   .SDcols = c("raw_water_level_cm", "rect_water_level_cm")], 
+                   .SDcols = c("centered_water_level_cm", "rect_water_level_cm")], 
        id.vars = c("water_sn", "baro_sn", "experiment"),
-       measure.vars = c("raw_water_level_cm", "rect_water_level_cm"),
+       measure.vars = c("centered_water_level_cm", "rect_water_level_cm"),
        variable.name = "type", 
        value.name = "rmse_cm")
 
@@ -463,7 +466,7 @@ rmse_mod_reduced <-
 
 ```
 
-The model form described in Equation \@ref{eq:comp-base} showed a good fit to
+The model form described in Equation \@ref(eq:comp-base) showed a good fit to
 the *test-data* data with bootstrapped estimates of adjusted $R^2$ ranging from
 0.89 to 0.98. The bootstrap predictions had RMSE values that ranged from 0.3208
 to 0.5092 cm, which includes the uncertainty inherent in the instrument
@@ -474,13 +477,15 @@ level showed a mean change of -0.001, -0.058, 0.042, and -0.614 cm within the
 _stat-sim_, _stat_dis_, _var-sim_, and _var-dis_ experimental periods
 respectively. The reduction in RMSE for the _stat-dis_ and _var-dis_ period were
 significant at the $\alpha=0.05$ level, as was the increase in RMSE in the
-_var-sim_ period. When the two water pressure transducers that showed outlier
-model performance (2025928 & 2030899, Figure or Table CCC (RMSE or Sigma plot))
+_var-sim_ period. When the two models that that showed outlier
+model performance (water transducer 2025928, Figure \@ref(fig:coefficients))
 were removed, the increase in RMSE in the _var-sim_ period was reduced to -0.018
 and was no longer significant.
 
-_Figure (or table) CCC: Plot or table showing model fit metrics for all 36 final
-models to highlight a couple of outliers_
+```{r coefficients, fig.cap="Mean and 95% confidence interval for model coefficients for the 1000 bootstrap models for the *test-data* period. Panels A and C show coefficients grouping by barometric transducer and panel B shows models grouping in pairs for each water-barometric transducer pair. Water transducer 2025928 (hollow) is highlighted to illustrate its disagreement with other models."}
+loadd(fig_coefficients_panel)
+fig_coefficients_panel
+```
 
 ```{r testing-vs-training}
 
@@ -489,7 +494,7 @@ testing_rmse <-
               .(water_sn, baro_sn, testing_rmse_cm = rmse_cm)]
 
 training_rmse <- 
-  uncertainty[experiment == "var-dis",  .(training_rmse_cm = sqrt(mean(((raw_water_level_cm - predicted_error_cm) - water_depth_cm)^2))), by = .(water_sn, baro_sn)]
+  fitted[experiment == "var-dis",  .(training_rmse_cm = sqrt(mean(((raw_water_level_cm - predicted_error_cm) - water_depth_cm)^2))), by = .(water_sn, baro_sn)]
 
 rmse_compare <- 
   melt(testing_rmse[training_rmse, on = c("water_sn", "baro_sn")],
@@ -532,13 +537,13 @@ loggers mentioned above.
 
 ```{r oor}
 
-predictions[, `:=`(raw_ooir = raw_water_level_cm < instrument_lower | raw_water_level_cm > instrument_upper, 
+predicted[, `:=`(raw_ooir = raw_water_level_cm < instrument_lower | raw_water_level_cm > instrument_upper, 
                  rect_ooir = rect_water_level_cm < instrument_lower | rect_water_level_cm > instrument_upper,
                  raw_oopr = raw_water_level_cm < propagated_lower | raw_water_level_cm > propagated_upper, 
                  rect_oopr = rect_water_level_cm < propagated_lower | rect_water_level_cm > propagated_upper)]
 
 oor_summary <- 
-  predictions[, lapply(.SD, sum),
+  predicted[, lapply(.SD, sum),
               by = .(water_sn, baro_sn, experiment),
               .SDcols = patterns("_oo")]
 
@@ -565,7 +570,7 @@ knitr::kable(setNames(oor_percent_all_points, c(" ", "Raw", "Rectified", "Raw", 
 
 ```{r uncertainty}
 uncertainty_tests <- 
-  uncertainty[, .(propagated_error_cm = mean(upper_bound_cm - lower_bound_cm),
+  fitted[, .(propagated_error_cm = mean(upper_bound_cm - lower_bound_cm),
                   instrument_error_full = mean(2 * qnorm(0.975) * instrument_error_cm)), 
               by = .(water_sn, baro_sn, experiment)][,
     t.test(propagated_error_cm, 
@@ -581,13 +586,13 @@ unctests <-
   as.list(setNames(set_errors(uncertainty_tests$estimate, uncertainty_tests$stderr), uncertainty_tests$experiment))
 
 uncertainty_summary <- 
-  uncertainty[, .(propagated_error_cm = mean(upper_bound_cm - lower_bound_cm),
+  fitted[, .(propagated_error_cm = mean(upper_bound_cm - lower_bound_cm),
                   instrument_error_full = mean(2 * qnorm(0.975) * instrument_error_cm)),
               by = .(experiment)]
 
 sig_letters <- 
   aov(propagated_error_cm ~ experiment, 
-      data = uncertainty[, .(propagated_error_cm = mean(upper_bound_cm - lower_bound_cm),
+      data = fitted[, .(propagated_error_cm = mean(upper_bound_cm - lower_bound_cm),
                              instrument_error_full = mean(2 * qnorm(0.975) * instrument_error_cm)),
                          by = .(water_sn, baro_sn, experiment = as.factor(experiment))]) %>% 
   glht(mcp(experiment = "Tukey")) %>% 
@@ -607,7 +612,7 @@ knitr::kable(unc_table,
              caption = "Mean Propagated and Instrument for all 36 transducer pair models by experimental period. Difference and standard error shows the change in confidence band size when all errors are incorporated and were tested for significance using a paired t-test within each experimental period (denoted by '*'). Difference in propagated errors between experimental periods was tested using a one-way ANOVA.")
 ```
 
-Instrument accuracy at a 95% confidence band for all models was either `r paste(unique(2*qnorm(0.975)*combined_data$testing$instrument_error_cm), collapse = ", or ")`cm,
+Instrument accuracy at a 95% confidence band for all models was either `r paste(round(unique(2*qnorm(0.975)*combined_data$testing$instrument_error_cm), 3), collapse = ", or ")`cm,
 with one of the three transducer models having greater stated accuracy (Table
 \@ref(tab:loggers)). When measurement errors and temperature effects were 
 propagated to represent full uncertainty, every experimental period showed a
@@ -619,7 +624,7 @@ periods. Experimental period *test-dat* had significantly larger uncertainty tha
 *var-dis*, which was significantly larger than the remaining three periods.
 
 ```{r new-errors}
-vardis <- predictions[experiment == "var-dis"]
+vardis <- predicted[experiment == "var-dis"]
 vardis[, propagated_error_cm := rect_water_level_cm - water_depth_cm]
 vardis_errors <- 
   vardis[, .(propagated_error_cm = 2 * qnorm(0.975) * sd(propagated_error_cm),
@@ -675,20 +680,19 @@ Importantly, the single model approach faithfully captures the need for
 individual transducer corrections. One possibility of the two-transducer model
 is that the model would be fit to some artifact of the interaction between the
 transducers, rather than each transducer being represented in the air and water
-temperature coefficients. Figure DDD shows that the air temperature coefficients
-were grouped by barometric transducer (two distinct regions of overlapping
-ranges), and the water temperature coefficients were grouped by water transducer
-(18 distinct regions of overlap of the two models representing each water
-transducer). Clear transducer differentiation also supports that for absolute
-pressure transducers, error is introduced primarily through independent water
-and air temperature errors not temperature difference. Correcting for water
-level error using temperature difference would disregard the differential
-transducer responses. Based on the scale of the coefficients for air temperature
-and water temperature, these errors would likely be small in this study. But the
-scale of the error would be directly proportional to the sensitivity of
-transducer to temperature and would vary between manufacturers and instruments.
-
-_Figure DDD: Plots showing the distribution of bootstrap model coefficients_
+temperature coefficients. Figure \@ref(fig:coefficients) shows that the air
+temperature coefficients were grouped by barometric transducer (two distinct
+regions of overlapping ranges), and the water temperature coefficients were
+grouped by water transducer (18 distinct regions of overlap of the two models
+representing each water transducer). Clear transducer differentiation also
+supports that for absolute pressure transducers, error is introduced primarily
+through independent water and air temperature errors not temperature difference.
+Correcting for water level error using temperature difference would disregard
+the differential transducer responses. Based on the scale of the coefficients
+for air temperature and water temperature, these errors would likely be small in
+this study. But the scale of the error would be directly proportional to the
+sensitivity of transducer to temperature and would vary between manufacturers
+and instruments.
 
 ```{r tdiff-evaluation, eval = FALSE}
 # Best performing test-dat model based on mean rmse of *var-dis* prediction
@@ -804,7 +808,7 @@ range of conditions have been captured during development.
 Model performance in this study was highly dependent on individual transducers.
 The barometric transducer 1065861 appears to be more sensitive to air
 temperature and high rates of temperature change, leading to larger errors at
-the beginning and end of the *var-dis* period (Figure EEE). This is further
+the beginning and end of the *var-dis* period (Figure \@ref(fig:bootstrap-timeseries)). This is further
 supported by the increased error associated with the compensation models for
 transducer 1065861 relative to transducer 1066019 (Figure of sigma distribution
 of bootstrapped models). Transducers 2025928 and 2030899 also show larger
@@ -833,10 +837,6 @@ for any errors.
 <!-- transducer measurements. Additionally no studies looking at the compensation of -->
 <!-- water level pressure transducers have been designed to test for commonality of  -->
 <!-- compensation approaches across multiple loggers. -->
-
-_Figure EEE: A panel of two plots. The first showing time series of corrected
-water level to highlight where the error occurs. The second would be a scatter
-plot showing residual error as a function of temperature_
 
 ```{r sigma-plots, eval = FALSE}
 {ggplot(bootstrap_models[experiment == "test-dat"],
