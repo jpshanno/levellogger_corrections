@@ -565,6 +565,10 @@ calculate_predicted_values <-
     predictions
   }
 
+
+# Figures -----------------------------------------------------------------
+
+
 create_drivers_panel <- 
   function(data){
     
@@ -607,11 +611,180 @@ create_drivers_panel <-
                   se = FALSE,
                   color = "black") +
       labs(x = expression(paste("Water Temperature, ", degree, "C")),
-           y = "Raw Error minus Air Temperature Effect, cm")
+           y = "Raw Error minus Air Temperature Effect, cm") +
+      theme_few()
     
     {fig1a + fig1b + fig1c + plot_annotation(tag_levels = "A")}
   }
 
+create_bootstrap_timeseries <- 
+  function(fits, models, exp, water.sn, baro.sn){
+    dat2 <- 
+      fits[experiment == exp & baro_sn == baro.sn & water_sn == water.sn]
+    
+    model_file <- 
+      glue("output/tabular/bootstrap_fit_values.df/{water.sn}_{baro.sn}_{exp}.fst")
+    
+    mods <- 
+      read_fst(model_file,
+               as.data.table = TRUE)
+    
+    r2_quartiles <- 
+      quantile(models[water_sn == water.sn &
+                                  baro_sn == baro.sn & 
+                                  experiment == exp, 
+                                adj_r2], 
+               seq(0, 1, 0.5),
+               type = 1)
+    
+    quartile_reps <- 
+      models[water_sn == water.sn &
+                         baro_sn == baro.sn & 
+                         experiment == exp & 
+                         adj_r2 %in% r2_quartiles, 
+                       model_rep]
+    
+    mods2 <- 
+      mods[model_rep %in% quartile_reps]
+    
+    mods2[dat2, 
+          `:=`(raw_water_level_cm = i.raw_water_level_cm,
+               centered_water_level_cm = i.centered_water_level_cm,
+               orig_rect_water_level_cm = i.rect_water_level_cm,
+               water_depth_cm = i.water_depth_cm,
+               instrument_lower = i.instrument_lower,
+               instrument_upper = i.instrument_upper,
+               propagated_lower = i.propagated_lower,
+               propagated_upper = i.propagated_upper),
+          on = c("sample_time")]
+    
+    mods2[, rect_water_level_cm := (raw_water_level_cm - predicted_error_cm) - mean(raw_water_level_cm - predicted_error_cm - water_depth_cm),
+          by = .(model_rep)]
+    
+    mods2[, sample := "no"]
+    mods2[between(sample_time, 
+                  as.POSIXct("2020-06-10 18:00", tz = "EST5EDT"), 
+                  as.POSIXct("2020-06-10 20:00", tz = "EST5EDT")),
+          sample := "yes"]
+    
+    ggplot(mods2, 
+           aes(x = sample_time)) +
+      geom_ribbon(aes(ymin = propagated_lower,
+                      ymax = propagated_upper),
+                  fill = "gray85") +
+      geom_ribbon(aes(ymin = instrument_lower,
+                      ymax = instrument_upper),
+                  fill = "gray75") +
+      geom_line(aes(y = rect_water_level_cm,
+                    color = as.factor(model_rep)),
+                show.legend = FALSE) +
+      geom_line(aes(y = orig_rect_water_level_cm),
+                color = "gray5",
+                size = 1) +
+      geom_line(aes(y = centered_water_level_cm),
+                color = "gray5",
+                linetype = "dotted") +
+      coord_cartesian(expand = FALSE) +
+      labs(x = "Water Level", 
+           y = "Sample Time") +
+      facet_zoom(x = sample == "yes",
+                 zoom.size = 0.5, 
+                 horizontal = FALSE,
+                 ylim = range(mods2[sample == "yes", rect_water_level_cm])) +
+      theme_few()+ 
+      theme(strip.background = element_rect(color = "black",
+                                            size = rel(1.5)))
+  }
+
+create_coefficients_panel <- 
+  function(models){
+    
+    dat4a <- 
+      models[experiment == "test-dat", 
+                       .(y = mean(air_temperature_c),
+                         ymin = quantile(air_temperature_c, 0.025), 
+                         ymax = quantile(air_temperature_c, 0.975)), 
+                       by = .(water_sn, baro_sn)] 
+    
+    dat4a[, outlier_sn := ifelse(water_sn == "2025928",
+                                 "yes",
+                                 "no")]  
+    
+    fig4a <- 
+      ggplot(dat4a,
+             aes(y = y, ymin = ymin, ymax = ymax,
+                 x = baro_sn,
+                 group = water_sn,
+                 color = outlier_sn,
+                 shape = outlier_sn)) +
+      geom_pointrange(position = position_dodge(width = 0.8),
+                      show.legend = FALSE,
+                      fill = "white") +
+      labs(y = expression(beta[Air~Temperature]),
+           x = "Barometric Transducer Serial Number") +
+      scale_shape_manual(values = c(19, 21)) +
+      theme(axis.text.x = element_text(angle = 45,
+                                       vjust = 1,
+                                       hjust = 1))
+    
+    dat4b <- 
+      models[experiment == "test-dat", 
+                       .(y = mean(water_temperature_c),
+                         ymin = quantile(water_temperature_c, 0.025), 
+                         ymax = quantile(water_temperature_c, 0.975)), 
+                       by = .(water_sn, baro_sn)] 
+    
+    dat4b[, outlier_sn := ifelse(water_sn == "2025928",
+                                 "yes",
+                                 "no")]  
+    
+    fig4b <- 
+      ggplot(dat4b,
+             aes(y = y, ymin = ymin, ymax = ymax,
+                 x = water_sn,
+                 group = baro_sn,
+                 color = outlier_sn,
+                 shape = outlier_sn)) +
+      geom_pointrange(position = position_dodge(width = 0.8),
+                      show.legend = FALSE,
+                      fill = "white") +
+      labs(y = expression(hat(beta)[Water~Temperature]),
+           x = "Water Transducer Serial Number") +
+      scale_shape_manual(values = c(19, 21)) +
+      theme(axis.text.x = element_text(angle = 45,
+                                       vjust = 1,
+                                       hjust = 1))
+    
+    dat4c <- 
+      models[experiment == "test-dat", 
+             .(y = mean(delta_at_01c_min),
+               ymin = quantile(delta_at_01c_min, 0.025), 
+               ymax = quantile(delta_at_01c_min, 0.975)), 
+             by = .(water_sn, baro_sn)]
+    
+    dat4c[, outlier_sn := ifelse(water_sn == "2025928",
+                                 "yes",
+                                 "no")]
+    
+    fig4c <- 
+      ggplot(dat4c,
+             aes(y = y, ymin = ymin, ymax = ymax,
+                 x = baro_sn,
+                 group = water_sn,
+                 color = outlier_sn,
+                 shape = outlier_sn)) +
+      geom_pointrange(position = position_dodge(width = 0.8),
+                      show.legend = FALSE,
+                      fill = "white") +
+      labs(y = expression(hat(beta)[Delta~Air~Temperature]),
+           x = "Barometric Transducer Serial Number") +
+      scale_shape_manual(values = c(19, 21)) +
+      theme(axis.text.x = element_text(angle = 45,
+                                       vjust = 1,
+                                       hjust = 1))
+    
+    fig4a + fig4b + fig4c + plot_annotation(tag_levels = "A")
+  }
 
 # Helper Functions --------------------------------------------------------
 

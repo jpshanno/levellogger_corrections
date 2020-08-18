@@ -38,10 +38,19 @@ plan <-
     
     # Calculated predicted values for testing data with models built on training
     # data
-    predicted = 
+    predicted =
       calculate_predicted_values(bootstrap_models, combined_data),
-    
+     
     fig_drivers_panel = 
-      create_drivers_panel(combined_data)
+      create_drivers_panel(combined_data),
     
+    fig_bootstrap_timeseries = 
+      create_bootstrap_timeseries(fitted,
+                                  bootstrap_models,
+                                  exp = "var-dis", 
+                                  water.sn = "1062452", 
+                                  baro.sn = "1066019"),
+    
+    fig_coefficients_panel = 
+      create_coefficients_panel(bootstrap_models)
   )
