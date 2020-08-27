@@ -1,7 +1,9 @@
 
 plan <- 
   drake_plan(
-    
+
+# Analysis ----------------------------------------------------------------
+
     # Read in manual measurements of cable length and water depth
     levellogger_measurements = 
       read_manual_measurements(file_in("data/levellogger_measurements.csv")),
@@ -40,7 +42,14 @@ plan <-
     # data
     predicted =
       calculate_predicted_values(bootstrap_models, combined_data),
-     
+    
+    # Export models for use
+    final_models = 
+      export_correction_models(models = bootstrap_models,
+                               file.out = file_out("output/tabular/final_correction_model_coefficients.csv")),
+
+# Figures -----------------------------------------------------------------
+
     fig_drivers_panel = 
       create_drivers_panel(combined_data),
     
@@ -53,4 +62,9 @@ plan <-
     
     fig_coefficients_panel = 
       create_coefficients_panel(bootstrap_models)
+
+
+# Tables ------------------------------------------------------------------
+
+
   )

@@ -565,6 +565,20 @@ calculate_predicted_values <-
     predictions
   }
 
+export_correction_models <- 
+  function(models, file.out){
+    median_mods <- 
+      models[experiment == "test-dat", 
+             lapply(.SD, median), 
+             by = .(water_sn, baro_sn),
+             .SDcols = c("intercept", "air_temperature_c", 
+                         "water_temperature_c", "delta_at_01c_min")]
+    
+    fwrite(median_mods, 
+           "output/tabular/final_correction_model_coefficients.csv")
+    
+    median_mods
+  }
 
 # Figures -----------------------------------------------------------------
 
@@ -685,8 +699,8 @@ create_bootstrap_timeseries <-
                 color = "gray5",
                 linetype = "dotted") +
       coord_cartesian(expand = FALSE) +
-      labs(x = "Water Level", 
-           y = "Sample Time") +
+      labs(y = "Water Level", 
+           x = "Sample Time") +
       facet_zoom(x = sample == "yes",
                  zoom.size = 0.5, 
                  horizontal = FALSE,
@@ -720,7 +734,7 @@ create_coefficients_panel <-
       geom_pointrange(position = position_dodge(width = 0.8),
                       show.legend = FALSE,
                       fill = "white") +
-      labs(y = expression(beta[Air~Temperature]),
+      labs(y = expression(hat(beta)[Air~Temperature]),
            x = "Barometric Transducer Serial Number") +
       scale_shape_manual(values = c(19, 21)) +
       theme(axis.text.x = element_text(angle = 45,
@@ -1061,7 +1075,7 @@ get_slope_p <-
       return(NA_real_)
     }
     
-    res <- tidy(model)
+    res <- broom::tidy(model)
     
     p_values <- res[["p.value"]][which(res$term != "(Intercept)")]
     
@@ -1078,7 +1092,7 @@ get_r2 <-
       return(NA_real_)
     }
     
-    glance(model)[["adj.r.squared"]]
+    broom::glance(model)[["adj.r.squared"]]
   }
 
 correction_residuals <- 
