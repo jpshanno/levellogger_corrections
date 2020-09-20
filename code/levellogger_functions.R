@@ -1214,18 +1214,18 @@ calculate_detrended_g <-
     #            corrected_Gamma_cm_s = corrected_gamma_b + corrected_gamma_m * corrected_detrended_cm)]
 
     data[, `:=`(raw_gamma_m = three_point_slope(sample_time, raw_dwtDT_dt),
-                corrected_gamma_m = three_point_slope(sample_time, corrected_dwtDT_dt))]
+                corrected_gamma_m = corrected_dwtDT_dt + three_point_slope(sample_time, corrected_dwtDT_dt))]
     
     data[!(hour(sample_time) %in% recharge_period),
          `:=`(raw_Gamma_cm_s = NA_real_,
               corrected_Gamma_cm_s = NA_real_)]
     
     data[!is.na(raw_gamma_m) & hour(sample_time) %in% recharge_period, 
-         raw_Gamma_cm_s := 900 * fitted(lm(raw_gamma_m ~ sample_time)),
+         raw_Gamma_cm_s := fitted(lm(raw_gamma_m ~ sample_time)),
          by = .(sample_date)]
     
     data[!is.na(corrected_gamma_m) & hour(sample_time) %in% recharge_period,
-         corrected_Gamma_cm_s :=  900 * fitted(lm(corrected_gamma_m ~ sample_time)),
+         corrected_Gamma_cm_s :=  fitted(lm(corrected_gamma_m ~ sample_time)),
          by = .(sample_date)]
     
     # data[, `:=`(raw_gamma_m = zoo::na.approx(raw_gamma_m, rule = 2),
@@ -1238,7 +1238,7 @@ calculate_detrended_g <-
     #            corrected_Gamma_cm_s = corrected_gamma_m * as.numeric(sample_time))]
         
     data[, `:=`(raw_net_in_cm_s = raw_sy * (raw_Gamma_cm_s - raw_detrend_m_cm_s),
-                corrected_net_in_cm_s = corrected_sy * (corrected_Gamma_cm_s - corrected_detrend_m_cm_s))]
+                corrected_net_in_cm_s = corrected_sy * (corrected_Gamma_cm_s + corrected_detrend_m_cm_s))]
     
     data[]
   }
@@ -1335,7 +1335,10 @@ ex_met[, .(sample_time,
 # periods of 0
 # Have to compare this with true Loheide method to see if I get 0 ET during 
 # those periods. From my recollection of implementing it I did not get 0 ET 
-# periods
+# periods. The problem may arise from the assumption that all delta S is due to
+# ET, when in fact we know that there are periods of streamflow, so even when ET
+# is 0 there should still be some loss to the system, which is what we are 
+# seeing
 
 ex_met[data[, .(sample_time, 
                 corrected_et_cm_hr = corrected_et_cm_s * 900, 
