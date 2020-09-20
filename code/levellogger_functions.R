@@ -567,12 +567,16 @@ calculate_predicted_values <-
 
 export_correction_models <- 
   function(models, file.out){
+    
     median_mods <- 
       models[experiment == "test-dat", 
              lapply(.SD, median), 
              by = .(water_sn, baro_sn),
              .SDcols = c("intercept", "air_temperature_c", 
                          "water_temperature_c", "delta_at_01c_min")]
+    
+    
+    
     
     fwrite(median_mods, 
            "output/tabular/final_correction_model_coefficients.csv")
@@ -800,8 +804,595 @@ create_coefficients_panel <-
     fig4a + fig4b + fig4c + plot_annotation(tag_levels = "A")
   }
 
+
+# Case Study Functions ----------------------------------------------------
+
+load_case_study <- 
+  function(data) {
+    dat <- 
+      fread(data,
+            colClasses = c("character", 
+                           "character",
+                           "POSIXct",
+                           "numeric",
+                           "numeric",
+                           "numeric",
+                           "numeric",
+                           "numeric",
+                           "numeric",
+                           "Date",
+                           "numeric"))
+    
+    dat[, sample_time := setattr(sample_time, "tzone", "EST5EDT")]
+    
+    setkey(dat, "sample_time")
+    
+    dat
+  }
+
+correct_data <- 
+  function(data, models){
+    
+    data[models, 
+         error_cm := air_temperature_c * i.air_temperature_c + water_temperature_c * i.water_temperature_c + delta_at_01c_min * i.delta_at_01c_min,
+         on = c("water_sn", "baro_sn")]
+    
+    data[, corrected_water_level_cm := raw_water_level_cm - error_cm]
+    
+    data
+  }
+
+compensate_data <- 
+  function(data, calibration.data){
+    
+    c_dat <- 
+      fread(calibration.data)
+    
+    attributes(c_dat)$tzone <- "EST5EDT"
+    
+    data[c_dat, 
+         on = "sample_time"]
+    
+    c_dat <- 
+      na.omit(data[c_dat, on = "sample_time"], 
+              cols = c("raw_water_level_cm", "corrected_water_level_cm"))
+    
+    c_dat <- 
+      c_dat[, .(raw_correction_cm = mean(raw_water_level_cm - (well_height_cm - manual_level_cm)),
+                corrected_correction_cm = mean(corrected_water_level_cm - (well_height_cm - manual_level_cm))),
+            by = .(field_season)]
+    
+    data[, field_season := year(sample_time)]
+    
+    data[c_dat,
+         `:=`(raw_compensated_level_cm = raw_water_level_cm - i.raw_correction_cm,
+              corrected_compensated_level_cm = corrected_water_level_cm - i.corrected_correction_cm),
+         on = "field_season"]
+    
+    data[, field_season := NULL]
+    
+    data
+  }
+
+smooth_data <- 
+  function(data, n, ...){
+    
+    for(col in c(...)){
+      set(data, j = col, value = frollmean(data[[col]], n = n, align = "center"))
+    }
+    
+    # data[, `:=`(raw_compensated_level_cm = frollmean(raw_compensated_level_cm, n = n, align = "center"),
+    #             corrected_compensated_level_cm = frollmean(corrected_compensated_level_cm, n = n, align = "center"))]
+    
+    data
+  }
+
+calculate_sy <- 
+  function(data){
+    
+    # Used a gap of 8 hours to define storms.
+    full_hours <- 
+      data[data.table(sample_time = seq(min(data$sample_time), 
+                                        max(data$sample_time), 
+                                        by = 900), 
+                      key = "sample_time")][minute(sample_time) == 0, .(sample_time, precip_cm)]
+    
+    full_hours[, status := fifelse(precip_cm > 0, "wet", "dry")]
+    full_hours[, run_length := rep(rle(status)$lengths, rle(status)$lengths)]
+    full_hours[, storm := fifelse(status == "dry" & run_length > 8,
+                                  "dry", 
+                                  "storm")]
+    full_hours[is.na(precip_cm), storm := "dry"]
+    full_hours[, storm_id := rleid(storm)]
+    
+    # Peak response seems to be around 4 hours after a rainfall
+    # Recession curves ------------------------
+    # data[month(sample_time) %in% 6:10 & minute(sample_time) == 0,
+    #      .(sample_time,
+    #        diff_time = as.numeric(shift(sample_time, -1) - sample_time), 
+    #        precip_cm, 
+    #        delta_wl_cm_hr = shift(corrected_water_level_cm, -1) - corrected_water_level_cm), 
+    #      by = .(field_season = year(sample_date))][
+    #        diff_time == 3600,
+    #        dry := fifelse(precip_cm > 0.3, 0, 1)][
+    #          , id := rleid(dry)][
+    #            , hours_since_rain := 1 + cumsum(dry), 
+    #            by = .(id)][
+    #              between(hours_since_rain, 0, 24)] %>% 
+    #   ggplot(aes(y = delta_wl_cm_hr, x = hours_since_rain), 
+    #          data = .) + geom_point() + geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs", k = 7))
+    # data[month(sample_date) %in% 6:8,
+    #      .(sample_date,
+    #        precip_cm,
+    #        corrected_water_level_cm,
+    #        lead_wl = shift(corrected_water_level_cm, -1)),
+    #      by = .(field_season = year(sample_date))][
+    #        , .(precip_cm = sum(precip_cm, na.rm = TRUE),
+    #            delta_wl_cm_d = last(lead_wl) - first(corrected_water_level_cm)),
+    #        by = .(field_season, sample_date)][
+    #          , dry_day := fifelse(precip_cm > 0.3, 0, 1)][
+    #            , id := rleid(dry_day)][
+    #              , days_since_rain := cumsum(dry_day),
+    #              by = .(id)][
+    #                between(days_since_rain, 0, 2)] %>%
+    #   plot(delta_wl_cm_d ~ days_since_rain, data = .)
+    
+    # summarize each storm by precip, start hour and end hour
+    # create end of diff(range()) period by adding 24 hours to start and end
+    # do a rolling join with data to get response period for each storm 
+    # linked to storm id
+    
+    storms <- 
+      full_hours[storm == "storm",
+                 .(start_time = min(sample_time), 
+                   end_time = max(sample_time), 
+                   end_response = max(sample_time) + 28800, 
+                   storm_precip_cm = sum(precip_cm, na.rm = TRUE)), 
+                 by = .(storm_id)]
+    
+    # Should consider moving storm start time back by some number of hours based
+    # on the not-infrequent case of storms hitting the precip gauge site after
+    # they hit the wetland
+    storms[storms[data, 
+           on = c("end_response >= sample_time", "start_time <= sample_time")][,
+             .(raw_dwt_cm = diff(range(raw_compensated_level_cm)),
+               corrected_dwt_cm = diff(range(corrected_compensated_level_cm)),
+               raw_compensated_level_cm = first(raw_compensated_level_cm),
+               corrected_compensated_level_cm = first(corrected_compensated_level_cm)),
+             by = .(storm_id)
+           ],
+           `:=`(raw_dwt_cm = i.raw_dwt_cm,
+                corrected_dwt_cm = i.corrected_dwt_cm,
+                raw_compensated_level_cm = i.raw_compensated_level_cm,
+                corrected_compensated_level_cm = i.corrected_compensated_level_cm),
+           on = "storm_id"]
+    
+   # sy_dat <-
+   #    data[,.(sample_time,
+   #            precip_cm,
+   #            raw_compensated_level_cm,
+   #            corrected_compensated_level_cm,
+   #            raw_dwt_cm = (shift(raw_compensated_level_cm, -24) - raw_compensated_level_cm),
+   #            corrected_dwt_cm = (shift(corrected_compensated_level_cm, -24) - corrected_compensated_level_cm)),
+   #         by = .(year(sample_time))][!is.na(precip_cm)]
+    
+    storms[, `:=`(raw_sy = storm_precip_cm / raw_dwt_cm,
+                  corrected_sy = storm_precip_cm / corrected_dwt_cm)]
+    
+    storms <- 
+      storms[!is.infinite(corrected_sy) | !is.infinite(raw_sy)]
+    
+    storms[, `:=`(raw_sy = fifelse(raw_sy > 1, 1, raw_sy),
+                  corrected_sy = fifelse(corrected_sy > 1, 1, corrected_sy))]
+    
+    set.seed(1234)
+    raw_threshold_mod <- 
+      mcp::mcp(model = list(raw_dwt_cm ~ 1, 
+                       ~ storm_precip_cm), 
+          data = storms)
+    
+    raw_precip_threshold <- 
+      extract_changepoint(raw_threshold_mod)
+    
+    corrected_threshold_mod <- 
+      mcp::mcp(model = list(corrected_dwt_cm ~ 1, 
+                       ~ storm_precip_cm), 
+          data = storms)
+    
+    corrected_precip_threshold <- 
+      extract_changepoint(corrected_threshold_mod)
+    
+    corrected_sy_mod <- 
+      nls(corrected_sy ~ b + m * exp(c * corrected_compensated_level_cm),
+          start = list(b = 0.175, m = 0.005,  c = 0.4),
+          data = storms[storm_precip_cm > corrected_precip_threshold])
+          # , weights = storms[storm_precip_cm > corrected_precip_threshold, 
+          #                  corrected_sy - mean(corrected_sy)]^2)
+      
+    raw_sy_mod <- 
+      nls(raw_sy ~ b + m * exp(c * raw_compensated_level_cm),
+          start = list(b = 0.175, m = 0.005,  c = 0.4),
+          data = storms[storm_precip_cm > raw_precip_threshold])
+          # , weights = storms[storm_precip_cm > raw_precip_threshold, 
+          #                  raw_sy - mean(raw_sy)]^2)
+    
+    # plot(raw_sy ~ raw_compensated_level_cm, data = storms[storm_precip_cm > raw_precip_threshold], col = "red", pch = 19)
+    # curve(predict(raw_sy_mod, type = "response", newdata = data.frame(raw_compensated_level_cm = x)), from = -100, to = 20, add = TRUE, col = "red")
+    # points(corrected_sy ~ corrected_compensated_level_cm, data = storms[storm_precip_cm > corrected_precip_threshold], col = "blue", pch = 19)
+    # curve(predict(corrected_sy_mod, type = "response", newdata = data.frame(corrected_compensated_level_cm = x)), from = -100, to = 20, add = TRUE, col = "blue")
+    
+    data[, `:=`(corrected_sy = predict(corrected_sy_mod, newdata = .SD),
+                      raw_sy = predict(raw_sy_mod, newdata = .SD))]
+    
+    data
+  }
+
+subset_year <- 
+  function(data, year){
+    data[year(sample_time) == year]
+  }
+
+subset_case_study <- 
+  function(data, start, end){
+    data[between(sample_time, 
+                 as.POSIXct(start, tz = "EST5EDT"), 
+                 as.POSIXct(end, tz = "EST5EDT"))]
+  }
+
+calculate_detrended_g <- 
+  function(data){
+    
+    recharge_period <- 
+      0:5
+    
+    # nested <-
+    #   map_dfr(unique(data$sample_date)[-c(length(unique(data$sample_date)))],
+    #            # c(list(c(0, 1, 2)), replicate(length(unique(data$sample_date))-2, -1:1, simplify = FALSE)),
+    #            ~data.table(sample_date = .x,
+    #                        dat = list(data[hour(sample_time) %in% recharge_period & sample_date %in% c(.x + -1:1)])))
+    # 
+    # # nested[sample_date %in% as.Date(paste0("2018-08-", 10:23)), dat] %>%
+    # #   map(~ggplot(data = .x,
+    # #               aes(x = sample_time, y = corrected_compensated_level_cm)) +
+    # #         ggtitle(unique(.x$sample_date)) +
+    # #         geom_point() +
+    # #         geom_smooth(method = "lm", se = FALSE)) %>%
+    # #   reduce(`+`)
+    # 
+    # nested[, `:=`(raw_detrend_mod = map(dat, function(x){lm(raw_compensated_level_cm ~ sample_time, data = x)}),
+    #               corrected_detrend_mod = map(dat, function(x){lm(corrected_compensated_level_cm ~ sample_time, data = x)}))]
+    # 
+    # nested[, `:=`(raw_detrend_m_cm_s = map_dbl(raw_detrend_mod,
+    #                                    ~coef(.x)[["sample_time"]]),
+    #               raw_detrend_b_cm_s = map_dbl(raw_detrend_mod,
+    #                                    ~coef(.x)[["(Intercept)"]]),
+    #               corrected_detrend_m_cm_s = map_dbl(corrected_detrend_mod,
+    #                                          ~coef(.x)[["sample_time"]]),
+    #               corrected_detrend_b_cm_s = map_dbl(corrected_detrend_mod,
+    #                                          ~coef(.x)[["(Intercept)"]]))]
+    # 
+    # data[nested,
+    #      `:=`(raw_detrend_m_cm_s = i.raw_detrend_m_cm_s,
+    #           raw_detrend_b_cm_s = i.raw_detrend_b_cm_s,
+    #           corrected_detrend_m_cm_s = i.corrected_detrend_m_cm_s,
+    #           corrected_detrend_b_cm_s = i.corrected_detrend_b_cm_s),
+    #      on = "sample_date"]
+    # 
+    # data[,`:=`(raw_detrended_cm = raw_compensated_level_cm - (raw_detrend_b_cm_s + raw_detrend_m_cm_s * as.numeric(sample_time)),
+    #            corrected_detrended_cm = corrected_compensated_level_cm - (corrected_detrend_b_cm_s + corrected_detrend_m_cm_s * as.numeric(sample_time)))]
+
+    # daily detrend:
+    nested <-
+      data[hour(sample_time) %in% recharge_period, 
+           .(raw_i_cm = first(raw_compensated_level_cm),
+             corrected_i_cm = first(corrected_compensated_level_cm)),
+           by = .(sample_date)]
+
+    nested[, `:=`(raw_f_cm = shift(raw_i_cm, -1),
+                 corrected_f_cm = shift(corrected_i_cm, -1))]
+
+    nested[, `:=`(raw_detrend_m_cm_s = (raw_f_cm - raw_i_cm) / 86400,
+                  corrected_detrend_m_cm_s = (corrected_f_cm - corrected_i_cm) / 86400)]
+
+    nested[, `:=`(raw_detrend_b_cm_s = raw_i_cm,
+                  corrected_detrend_b_cm_s =corrected_i_cm)]
+
+    data[nested,
+         `:=`(raw_detrend_m_cm_s = i.raw_detrend_m_cm_s,
+              raw_detrend_b_cm_s = i.raw_detrend_b_cm_s,
+              corrected_detrend_m_cm_s = i.corrected_detrend_m_cm_s,
+              corrected_detrend_b_cm_s = i.corrected_detrend_b_cm_s),
+         on = "sample_date"]
+
+    data[,`:=`(raw_detrended_cm = raw_compensated_level_cm - (raw_detrend_b_cm_s + raw_detrend_m_cm_s * as.numeric(sample_time - min(sample_time))),
+               corrected_detrended_cm = corrected_compensated_level_cm - (corrected_detrend_b_cm_s + corrected_detrend_m_cm_s * as.numeric(sample_time - min(sample_time)))),
+         by = .(sample_date)]
+
+    data[!(hour(sample_time) %in% recharge_period),
+         `:=`(raw_detrend_m_cm_s = NA_real_,
+              raw_detrend_b_cm_s = NA_real_,
+              corrected_detrend_m_cm_s = NA_real_,
+              corrected_detrend_b_cm_s = NA_real_)]
+
+    data[, `:=`(raw_detrend_m_cm_s = zoo::na.spline(raw_detrend_m_cm_s),
+                raw_detrend_b_cm_s = zoo::na.spline(raw_detrend_b_cm_s), 
+                corrected_detrend_m_cm_s = zoo::na.spline(corrected_detrend_m_cm_s), 
+                corrected_detrend_b_cm_s = zoo::na.spline(corrected_detrend_b_cm_s))]
+
+    data[, `:=`(raw_dwtDT_dt = three_point_slope(sample_time, raw_detrended_cm),
+                corrected_dwtDT_dt = three_point_slope(sample_time, corrected_detrended_cm))]
+    
+    # Gamma_dat <- 
+    #   data[, .(sample_time,
+    #            sample_date,
+    #            raw_compensated_level_cm,
+    #            corrected_compensated_level_cm,
+    #            raw_detrended_cm,
+    #            corrected_detrended_cm,
+    #            raw_dwtDT_dt,
+    #            corrected_dwtDT_dt)]
+    # 
+    # Gamma_dat <- 
+    #   Gamma_dat[hour(sample_time) %in% recharge_period]
+
+    # Need to create Gamma(wt) for each day separately. Then need to find a 
+    # way to smoothly move between the two days to create a function. If it were
+    # just slope it would be easy to use linear interpretation between the two 
+    # recharge period models. But it isn't, need to think about how to transition
+    # slope and intercept
+    # The assumption of an approximately linear relationship for Gamma(wt) 
+    # between recharge periods does not hold
+    
+    # Gamma_dat <- 
+    #   map_dfr(unique(Gamma_dat$sample_date)[-c(length(unique(Gamma_dat$sample_date)))], 
+    #           ~data.table(sample_date = .x, 
+    #                       data = list(Gamma_dat[sample_date %in% c(.x)])))
+    # 
+    # Gamma_dat[sample_date %in% as.Date(paste0("2018-08-", 10:23)), data] %>%
+    #   map(~ggplot(data = .x,
+    #               aes(x = corrected_detrended_cm, y = corrected_dwtDT_dt)) +
+    #         ggtitle(unique(.x$sample_date)) +
+    #         geom_point(aes(color = as.factor(sample_date)),
+    #                    show.legend = FALSE) +
+    #         geom_smooth(method = "lm", se = FALSE, formula = "y ~ x")) %>%
+    #   reduce(`+`)
+    # 
+    # Gamma_dat[sample_date %in% as.Date(paste0("2018-08-", 10:23)), data] %>%
+    #   map(~ggplot(data = .x,
+    #               aes(x = sample_time, y = three_point_slope(sample_time, corrected_dwtDT_dt))) +
+    #         ggtitle(unique(.x$sample_date)) +
+    #         geom_point(aes(color = as.factor(sample_date)),
+    #                    show.legend = FALSE) +
+    #         geom_smooth(method = "lm", se = FALSE, formula = "y ~ x")) %>%
+    #   reduce(`+`)
+    
+    # Gamma_dat[sample_date %in% as.Date(paste0("2018-08-", 10:23)), data][1:13] %>% 
+    #   rbindlist() %>% 
+    #   ggplot(aes(x = corrected_detrended_cm, 
+    #              y = corrected_dwtDT_dt, 
+    #              color = as.factor(sample_date))) +
+    #   geom_point() + scale_color_viridis_d() +
+    #   geom_smooth(method = "lm", se = FALSE)
+    
+    # For daily data need to remove days with no valid observations
+    # null_dates <- 
+    #   Gamma_dat[, .(sample_date, 
+    #                 nobs = map_dbl(data, nrow), 
+    #                 na_dwtDT_dt = map_dbl(data, ~sum(is.na(.x$corrected_dwtDT_dt))), 
+    #                 na_WTDT = map_dbl(data, ~sum(is.na(.x$corrected_detrended_cm))))]
+    # 
+    # null_dates <- 
+    #   null_dates[nobs == na_dwtDT_dt | nobs == na_WTDT, sample_date]
+    #     
+    # Gamma_wt <- 
+    #   Gamma_dat[!(sample_date %in% null_dates), 
+    #             c(as.list(coef(lm(corrected_dwtDT_dt ~ corrected_detrended_cm, data = data[[1]]))),
+    #               as.list(coef(lm(raw_dwtDT_dt ~ raw_detrended_cm, data = data[[1]])))), 
+    #             by = .(sample_date)]
+    # 
+    # setnames(Gamma_wt, c("sample_date", "corrected_b", "corrected_m", "raw_b", "raw_m"))
+    # 
+    # data[Gamma_wt,
+    #      `:=`(raw_gamma_m = i.raw_m,
+    #           raw_gamma_b = i.raw_b,
+    #           corrected_gamma_m = i.corrected_m,
+    #           corrected_gamma_b = i.corrected_b),
+    #      on = "sample_date"]
+    
+    # data[!(hour(sample_time) %in% recharge_period),
+    #      `:=`(raw_gamma_m = NA_real_,
+    #           raw_gamma_b = NA_real_,
+    #           corrected_gamma_m = NA_real_,
+    #           corrected_gamma_b = NA_real_)]
+    # 
+    # data[, `:=`(raw_gamma_m = zoo::na.spline(raw_gamma_m),
+    #             raw_gamma_b = zoo::na.spline(raw_gamma_b), 
+    #             corrected_gamma_m = zoo::na.spline(corrected_gamma_m), 
+    #             corrected_gamma_b = zoo::na.spline(corrected_gamma_b))]
+    # 
+    # data[,`:=`(raw_Gamma_cm_s = raw_gamma_b + raw_gamma_m * raw_detrended_cm,
+    #            corrected_Gamma_cm_s = corrected_gamma_b + corrected_gamma_m * corrected_detrended_cm)]
+
+    data[, `:=`(raw_gamma_m = three_point_slope(sample_time, raw_dwtDT_dt),
+                corrected_gamma_m = three_point_slope(sample_time, corrected_dwtDT_dt))]
+    
+    data[!(hour(sample_time) %in% recharge_period),
+         `:=`(raw_Gamma_cm_s = NA_real_,
+              corrected_Gamma_cm_s = NA_real_)]
+    
+    data[!is.na(raw_gamma_m) & hour(sample_time) %in% recharge_period, 
+         raw_Gamma_cm_s := 900 * fitted(lm(raw_gamma_m ~ sample_time)),
+         by = .(sample_date)]
+    
+    data[!is.na(corrected_gamma_m) & hour(sample_time) %in% recharge_period,
+         corrected_Gamma_cm_s :=  900 * fitted(lm(corrected_gamma_m ~ sample_time)),
+         by = .(sample_date)]
+    
+    # data[, `:=`(raw_gamma_m = zoo::na.approx(raw_gamma_m, rule = 2),
+    #             corrected_gamma_m = zoo::na.approx(corrected_gamma_m, rule = 2))]
+    
+    data[, `:=`(raw_Gamma_cm_s = zoo::na.spline(raw_Gamma_cm_s),
+                corrected_Gamma_cm_s = zoo::na.spline(corrected_Gamma_cm_s))]
+    
+    # data[,`:=`(raw_Gamma_cm_s = raw_gamma_m * as.numeric(sample_time),
+    #            corrected_Gamma_cm_s = corrected_gamma_m * as.numeric(sample_time))]
+        
+    data[, `:=`(raw_net_in_cm_s = raw_sy * (raw_Gamma_cm_s - raw_detrend_m_cm_s),
+                corrected_net_in_cm_s = corrected_sy * (corrected_Gamma_cm_s - corrected_detrend_m_cm_s))]
+    
+    data[]
+  }
+
+calculate_delta_s <- 
+  function(data){
+    
+    data[, `:=`(raw_dwt_cm_s = three_point_slope(sample_time, raw_compensated_level_cm),
+                corrected_dwt_cm_s = three_point_slope(sample_time, corrected_compensated_level_cm))]
+   
+    data <- 
+      smooth_data(data, "raw_dwt_cm_s", "corrected_dwt_cm_s", n = 13)
+    
+    data[] 
+    # data[, `:=`(raw_dwt_cm_s = (shift(raw_compensated_level_cm, -1) - raw_compensated_level_cm) / 900,
+    #             corrected_dwt_cm_s = (shift(corrected_compensated_level_cm, -1) - corrected_compensated_level_cm) / 900)]
+  }
+
+# The decline of water levels following rain is steeper than anticpated by the 
+# basic detrending procedure. This means that for 1-2 days after rain there is
+# a faster decline in water levels than would be anticipated. A simple/post-hoc
+# solution may be to use a left-aligned window to detrend (which will cause 
+# problems for days with preceding rainfall). A more mechanistic solution would
+# be to develop a recession curve (which would likely vary with water level) and
+# apply that in addition to the detrending slope. Or perhaps there is an event-
+# based recession curve, but also a recession curve that can be applied to non-
+# precipitation events, which is just how quickly the wetland drains, which 
+# would certainly vary with water level.
+
+# @watras-2017 was able to apply the @loheideii-2008 method because of the 
+# small magnitude of seasonal water level fluctations (an the corresponding 
+# small responses to preciptation)
+
+# We have an outflow stream! Its really calculating net loss, not just ET. May
+# need a PQ ratio for these wetlands to subtract out surface losses
+
+calculate_et <- 
+  function(data){
+    data[, `:=`(raw_et_cm_s = raw_net_in_cm_s - raw_sy * raw_dwt_cm_s,
+                corrected_et_cm_s = corrected_net_in_cm_s - corrected_sy * corrected_dwt_cm_s)]
+    
+    data[]
+    
+  }
+
+
+# Compare to PET ----------------------------------------------------------
+
+
+ex_met <- 
+  cbind(fread("../Data/Raw/Downloaded/mesowest_met/WKFM4.2019-12-31.csv", 
+              select = c(1, 2, 4, 5, 6, 8, 9, 10, 11, 13), 
+              skip = 12, 
+              col.names = c("station_id", "sample_time", "air_temperature_c", 
+                            "relative_humidity", "wind_speed_m_s", 
+                            "wind_gust_m_s", "solar_rad_w_m2", "precip_mm", 
+                            "wind_peak_m_s", "dew_point_temperature_c")), 
+        setnames(data.table(t(fread("../Data/Raw/Downloaded/mesowest_met/WKFM4.2019-12-31.csv", 
+                                    skip = 6, 
+                                    nrows = 3, 
+                                    header = FALSE, 
+                                    sep = ":")[, 2])), 
+                 c("latitude", "longitude", "elevation_m")))
+
+ex_met[, sample_time := sample_time - 60]
+
+ex_met[, `:=`(sample_time = setattr(sample_time, "tzone", "EST5EDT"),
+              elevation_m = elevation_m / 3.2808, 
+              solar_rad_MJ_m2_hr = solar_rad_w_m2 * 3600 * 1e-6,
+              solar_rad_w_m2 = NULL)]
+
+ex_met[, etr_cm_hr := 0.1 * water::hourlyET(data.frame(wind = wind_speed_m_s,
+                                                       RH = relative_humidity, 
+                                                       temp = air_temperature_c, 
+                                                       radiation = solar_rad_MJ_m2_hr, 
+                                                       height = 6.1, 
+                                                       lat= latitude, 
+                                                       long = longitude, 
+                                                       elev = elevation_m),
+                                            DOY = yday(sample_time), 
+                                            hours = hour(sample_time), 
+                                            ET = "ETo", 
+                                            long.z = longitude)]
+
+ex_met[, .(sample_time, 
+           etr_cm_hr = 0.1*water::hourlyET(data.frame(wind = wind_speed_m_s, RH = relative_humidity, temp = air_temperature_c, radiation = solar_rad_MJ_m2_hr, height = 6.1, lat= latitude, long = longitude, elev = elevation_m), DOY = yday(sample_time), hours = hour(sample_time), ET = "ETo", long.z = longitude))][data[, .(sample_time, corrected_et_cm_hr = corrected_et_cm_s * 900, corrected_net_in_cm_hr = corrected_net_in_cm_s * 900, precip_cm, corrected_sy)], on = "sample_time", nomatch = NULL][, etr_cm_hr := etr_cm_hr + corrected_net_in_cm_hr][, .(precip_cm = sum(precip_cm, na.rm = TRUE), etr_cm_d = sum(etr_cm_hr), corrected_et_cm_d = sum(corrected_et_cm_hr)), by = .(sample_date = as.Date(sample_time, tz = "EST5EDT"))] %>% rq(corrected_et_cm_d ~ etr_cm_d, data = .)
+
+# Hourly Dygraph
+# subtracting corrected_net_in_cm_hr from ET is not equivalent to adding it to
+# PET. I think it is because the modified Loheide method I used above does not
+# set ET equal to zero during recharge periods, even if that is the assumption.
+# Should probably work to confirm this issue, but ET - r is not the same as 
+# PET + r because PET has periods of 0, but ET - r does not have those same 
+# periods of 0
+# Have to compare this with true Loheide method to see if I get 0 ET during 
+# those periods. From my recollection of implementing it I did not get 0 ET 
+# periods
+
+ex_met[data[, .(sample_time, 
+                corrected_et_cm_hr = corrected_et_cm_s * 900, 
+                corrected_net_in_cm_hr = corrected_net_in_cm_s * 900, 
+                precip_cm, corrected_sy)], 
+       on = "sample_time", 
+       nomatch = NULL][, etr_cm_hr := etr_cm_hr + corrected_net_in_cm_hr] %>% 
+  dy_graph(etr_cm_hr, corrected_et_cm_hr, corrected_net_in_cm_hr)
+
+# Daily Correlation
+ex_met[data[, .(sample_time, 
+                corrected_et_cm_hr = corrected_et_cm_s * 900, 
+                corrected_net_in_cm_hr = corrected_net_in_cm_s * 900, 
+                corrected_sy = corrected_sy, 
+                precip_cm, corrected_sy)],
+       on = "sample_time", 
+       nomatch = NULL][, etr_cm_hr := etr_cm_hr + corrected_net_in_cm_hr][
+         , .(precip_cm = sum(precip_cm, na.rm = TRUE), 
+             etr_cm_d = sum(etr_cm_hr), 
+             corrected_et_cm_d = sum(corrected_et_cm_hr)), 
+         by = .(sample_date = as.Date(sample_time, tz = "EST5EDT"))] %>% 
+  plot(corrected_et_cm_d ~ etr_cm_d, 
+       data = .)
+# 
+
+adjust_water_balance <- 
+  function(data){
+    data[raw_et_cm_s < 0,
+         `:=`(raw_et_cm_s = raw_et_cm_s - raw_et_cm_s,
+              raw_net_in_cm_s = raw_net_in_cm_s - raw_et_cm_s)]
+    
+    data[corrected_et_cm_s < 0,
+         `:=`(corrected_et_cm_s = corrected_et_cm_s - corrected_et_cm_s,
+              corrected_net_in_cm_s = corrected_net_in_cm_s - corrected_et_cm_s)]
+  }
+
+drop_trailing_data <- 
+  function(data, drop.date){
+    data[sample_date != as.Date(drop.date, tz = "EST5EDT")]
+  }
+
 # Helper Functions --------------------------------------------------------
 
+three_point_slope <- 
+  function(x, y){
+    if(inherits(x, "POSIXt")){
+      x <- as.numeric(x)
+    }
+    
+    m1 <- 
+      (shift(y, -1) - y) / (shift(x, -1) - x)
+      
+    m2 <- 
+      (y - shift(y, 1)) / (x - shift(x, 1))
+    
+    (m1 + m2) / 2
+  }
 
 loadd_raw_data <- 
   function(){
@@ -1222,7 +1813,7 @@ model_changepoints <-
 
 extract_changepoint <- 
   function(model){
-    res <- fixef(model)
+    res <- mcp::fixef(model)
     res <- subset(res, name == "cp_1", drop = TRUE)
     res[["mean"]]
   }

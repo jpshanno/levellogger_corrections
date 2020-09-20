@@ -2,7 +2,7 @@
 plan <- 
   drake_plan(
 
-# Analysis ----------------------------------------------------------------
+# Original Analysis -------------------------------------------------------
 
     # Read in manual measurements of cable length and water depth
     levellogger_measurements = 
@@ -47,6 +47,29 @@ plan <-
     final_models = 
       export_correction_models(models = bootstrap_models,
                                file.out = file_out("output/tabular/final_correction_model_coefficients.csv")),
+
+
+# Case Study --------------------------------------------------------------
+
+    # Load and compensate case study data
+    # REMEMBER TO SET TIMEZONE
+    case_study =
+      load_case_study(data = file_in("data/case_study/example_data.csv")) %>% 
+      correct_data(models = final_models) %>% 
+      compensate_data(calibration.data = file_in("data/case_study/calibration_data.csv")) %>%
+      smooth_data(n = 13, "raw_compensated_level_cm", "corrected_compensated_level_cm") %>%
+      calculate_sy() %>%
+      subset_year(year = 2018),
+
+    # Calculate water balance components
+    water_balance =
+      subset_case_study(data = case_study,
+                        start = "2018-08-09 00:00",
+                        end = "2018-08-23 06:00") %>%
+      calculate_detrended_g() %>%
+      calculate_delta_s() %>%
+      calculate_et() %>% 
+      drop_trailing_data("2018-08-23"),
 
 # Figures -----------------------------------------------------------------
 
