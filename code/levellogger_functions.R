@@ -566,7 +566,7 @@ calculate_predicted_values <-
   }
 
 export_correction_models <- 
-  function(models, file.out){
+  function(models, file.out, generic.ltjr.file = NULL){
     
     median_mods <- 
       models[experiment == "test-dat", 
@@ -575,11 +575,26 @@ export_correction_models <-
              .SDcols = c("intercept", "air_temperature_c", 
                          "water_temperature_c", "delta_at_01c_min")]
     
-    
-    
-    
     fwrite(median_mods, 
-           "output/tabular/final_correction_model_coefficients.csv")
+           file.out)
+    
+    if(!is.null(generic.ltjr.file)){
+      generic_mods <- 
+        models[logger_metadata[instrument_type == "LT_Jr",
+                               .(serial_number)],
+               on = c("water_sn" = "serial_number"), 
+               nomatch = NULL]
+      
+      generic_mods <- 
+        generic_mods[experiment == "test-dat", 
+                     lapply(.SD, median),
+                     by = .(baro_sn), 
+                     .SDcols = c("intercept", "air_temperature_c", 
+                                 "water_temperature_c", "delta_at_01c_min")]
+      
+      fwrite(generic_mods, 
+             generic.ltjr.file)
+    }
     
     median_mods
   }
