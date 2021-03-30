@@ -890,139 +890,116 @@ smooth_data <-
 calculate_sy <- 
   function(data){
     
-    # Used a gap of 8 hours to define storms.
-    full_hours <- 
-      data[data.table(sample_time = seq(min(data$sample_time), 
-                                        max(data$sample_time), 
-                                        by = 900), 
-                      key = "sample_time")][minute(sample_time) == 0, .(sample_time, precip_cm)]
     
-    full_hours[, status := fifelse(precip_cm > 0, "wet", "dry")]
-    full_hours[, run_length := rep(rle(status)$lengths, rle(status)$lengths)]
-    full_hours[, storm := fifelse(status == "dry" & run_length > 8,
-                                  "dry", 
-                                  "storm")]
-    full_hours[is.na(precip_cm), storm := "dry"]
-    full_hours[, storm_id := rleid(storm)]
+    esy_function <- 
+      function (wl = NULL, min.esy = 1.00046) 
+        pmax(min.esy, 9.86792148868664 - (9.86792148868664 - 2.39189118793206) * 
+               exp(0.00983144846311064 * wl))
     
-    # Peak response seems to be around 4 hours after a rainfall
-    # Recession curves ------------------------
-    # data[month(sample_time) %in% 6:10 & minute(sample_time) == 0,
-    #      .(sample_time,
-    #        diff_time = as.numeric(shift(sample_time, -1) - sample_time), 
-    #        precip_cm, 
-    #        delta_wl_cm_hr = shift(corrected_water_level_cm, -1) - corrected_water_level_cm), 
-    #      by = .(field_season = year(sample_date))][
-    #        diff_time == 3600,
-    #        dry := fifelse(precip_cm > 0.3, 0, 1)][
-    #          , id := rleid(dry)][
-    #            , hours_since_rain := 1 + cumsum(dry), 
-    #            by = .(id)][
-    #              between(hours_since_rain, 0, 24)] %>% 
-    #   ggplot(aes(y = delta_wl_cm_hr, x = hours_since_rain), 
-    #          data = .) + geom_point() + geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs", k = 7))
-    # data[month(sample_date) %in% 6:8,
-    #      .(sample_date,
-    #        precip_cm,
-    #        corrected_water_level_cm,
-    #        lead_wl = shift(corrected_water_level_cm, -1)),
-    #      by = .(field_season = year(sample_date))][
-    #        , .(precip_cm = sum(precip_cm, na.rm = TRUE),
-    #            delta_wl_cm_d = last(lead_wl) - first(corrected_water_level_cm)),
-    #        by = .(field_season, sample_date)][
-    #          , dry_day := fifelse(precip_cm > 0.3, 0, 1)][
-    #            , id := rleid(dry_day)][
-    #              , days_since_rain := cumsum(dry_day),
-    #              by = .(id)][
-    #                between(days_since_rain, 0, 2)] %>%
-    #   plot(delta_wl_cm_d ~ days_since_rain, data = .)
-    
-    # summarize each storm by precip, start hour and end hour
-    # create end of diff(range()) period by adding 24 hours to start and end
-    # do a rolling join with data to get response period for each storm 
-    # linked to storm id
-    
-    storms <- 
-      full_hours[storm == "storm",
-                 .(start_time = min(sample_time), 
-                   end_time = max(sample_time), 
-                   end_response = max(sample_time) + 28800, 
-                   storm_precip_cm = sum(precip_cm, na.rm = TRUE)), 
-                 by = .(storm_id)]
-    
-    # Should consider moving storm start time back by some number of hours based
-    # on the not-infrequent case of storms hitting the precip gauge site after
-    # they hit the wetland
-    storms[storms[data, 
-           on = c("end_response >= sample_time", "start_time <= sample_time")][,
-             .(raw_dwt_cm = diff(range(raw_compensated_level_cm)),
-               corrected_dwt_cm = diff(range(corrected_compensated_level_cm)),
-               raw_compensated_level_cm = first(raw_compensated_level_cm),
-               corrected_compensated_level_cm = first(corrected_compensated_level_cm)),
-             by = .(storm_id)
-           ],
-           `:=`(raw_dwt_cm = i.raw_dwt_cm,
-                corrected_dwt_cm = i.corrected_dwt_cm,
-                raw_compensated_level_cm = i.raw_compensated_level_cm,
-                corrected_compensated_level_cm = i.corrected_compensated_level_cm),
-           on = "storm_id"]
-    
-   # sy_dat <-
-   #    data[,.(sample_time,
-   #            precip_cm,
-   #            raw_compensated_level_cm,
-   #            corrected_compensated_level_cm,
-   #            raw_dwt_cm = (shift(raw_compensated_level_cm, -24) - raw_compensated_level_cm),
-   #            corrected_dwt_cm = (shift(corrected_compensated_level_cm, -24) - corrected_compensated_level_cm)),
-   #         by = .(year(sample_time))][!is.na(precip_cm)]
-    
-    storms[, `:=`(raw_sy = storm_precip_cm / raw_dwt_cm,
-                  corrected_sy = storm_precip_cm / corrected_dwt_cm)]
-    
-    storms <- 
-      storms[!is.infinite(corrected_sy) | !is.infinite(raw_sy)]
-    
-    storms[, `:=`(raw_sy = fifelse(raw_sy > 1, 1, raw_sy),
-                  corrected_sy = fifelse(corrected_sy > 1, 1, corrected_sy))]
-    
-    set.seed(1234)
-    raw_threshold_mod <- 
-      mcp::mcp(model = list(raw_dwt_cm ~ 1, 
-                       ~ storm_precip_cm), 
-          data = storms)
-    
-    raw_precip_threshold <- 
-      extract_changepoint(raw_threshold_mod)
-    
-    corrected_threshold_mod <- 
-      mcp::mcp(model = list(corrected_dwt_cm ~ 1, 
-                       ~ storm_precip_cm), 
-          data = storms)
-    
-    corrected_precip_threshold <- 
-      extract_changepoint(corrected_threshold_mod)
-    
-    corrected_sy_mod <- 
-      nls(corrected_sy ~ b + m * exp(c * corrected_compensated_level_cm),
-          start = list(b = 0.175, m = 0.005,  c = 0.4),
-          data = storms[storm_precip_cm > corrected_precip_threshold])
-          # , weights = storms[storm_precip_cm > corrected_precip_threshold, 
-          #                  corrected_sy - mean(corrected_sy)]^2)
-      
-    raw_sy_mod <- 
-      nls(raw_sy ~ b + m * exp(c * raw_compensated_level_cm),
-          start = list(b = 0.175, m = 0.005,  c = 0.4),
-          data = storms[storm_precip_cm > raw_precip_threshold])
-          # , weights = storms[storm_precip_cm > raw_precip_threshold, 
-          #                  raw_sy - mean(raw_sy)]^2)
-    
-    # plot(raw_sy ~ raw_compensated_level_cm, data = storms[storm_precip_cm > raw_precip_threshold], col = "red", pch = 19)
-    # curve(predict(raw_sy_mod, type = "response", newdata = data.frame(raw_compensated_level_cm = x)), from = -100, to = 20, add = TRUE, col = "red")
-    # points(corrected_sy ~ corrected_compensated_level_cm, data = storms[storm_precip_cm > corrected_precip_threshold], col = "blue", pch = 19)
-    # curve(predict(corrected_sy_mod, type = "response", newdata = data.frame(corrected_compensated_level_cm = x)), from = -100, to = 20, add = TRUE, col = "blue")
-    
-    data[, `:=`(corrected_sy = predict(corrected_sy_mod, newdata = .SD),
-                      raw_sy = predict(raw_sy_mod, newdata = .SD))]
+    data[, `:=`(corrected_sy = 1/esy_function(corrected_compensated_level_cm),
+                raw_sy = 1/esy_function(raw_compensated_level_cm))]
+   #  # Used a gap of 8 hours to define storms.
+   #  full_hours <- 
+   #    data[data.table(sample_time = seq(min(data$sample_time), 
+   #                                      max(data$sample_time), 
+   #                                      by = 900), 
+   #                    key = "sample_time")][minute(sample_time) == 0, .(sample_time, precip_cm)]
+   #  
+   #  full_hours[, status := fifelse(precip_cm > 0, "wet", "dry")]
+   #  full_hours[, run_length := rep(rle(status)$lengths, rle(status)$lengths)]
+   #  full_hours[, storm := fifelse(status == "dry" & run_length > 8,
+   #                                "dry", 
+   #                                "storm")]
+   #  full_hours[is.na(precip_cm), storm := "dry"]
+   #  full_hours[, storm_id := rleid(storm)]
+   #  
+   #  # summarize each storm by precip, start hour and end hour
+   #  # create end of diff(range()) period by adding 8 hours to start and end
+   #  # do a rolling join with data to get response period for each storm 
+   #  # linked to storm id. End response time may be too small, using the recession
+   #  # curve appraoch above I saw some storms still increasing after 12 hours
+   #  
+   #  storms <- 
+   #    full_hours[storm == "storm",
+   #               .(start_time = min(sample_time), 
+   #                 end_time = max(sample_time), 
+   #                 end_response = max(sample_time) + 28800, 
+   #                 storm_precip_cm = sum(precip_cm, na.rm = TRUE)), 
+   #               by = .(site, storm_id)]
+   #  
+   #  # Should consider moving storm start time back by some number of hours based
+   #  # on the not-infrequent case of storms hitting the precip gauge site after
+   #  # they hit the wetland
+   #  storms[storms[data, 
+   #         on = c("end_response >= sample_time", "start_time <= sample_time")][,
+   #           .(raw_dwt_cm = diff(range(raw_compensated_level_cm)),
+   #             corrected_dwt_cm = diff(range(corrected_compensated_level_cm)),
+   #             raw_compensated_level_cm = first(raw_compensated_level_cm),
+   #             corrected_compensated_level_cm = first(corrected_compensated_level_cm)),
+   #           by = .(storm_id)
+   #         ],
+   #         `:=`(raw_dwt_cm = i.raw_dwt_cm,
+   #              corrected_dwt_cm = i.corrected_dwt_cm,
+   #              raw_compensated_level_cm = i.raw_compensated_level_cm,
+   #              corrected_compensated_level_cm = i.corrected_compensated_level_cm),
+   #         on = "storm_id"]
+   #  
+   # # sy_dat <-
+   # #    data[,.(sample_time,
+   # #            precip_cm,
+   # #            raw_compensated_level_cm,
+   # #            corrected_compensated_level_cm,
+   # #            raw_dwt_cm = (shift(raw_compensated_level_cm, -24) - raw_compensated_level_cm),
+   # #            corrected_dwt_cm = (shift(corrected_compensated_level_cm, -24) - corrected_compensated_level_cm)),
+   # #         by = .(year(sample_time))][!is.na(precip_cm)]
+   #  
+   #  storms[, `:=`(raw_sy = storm_precip_cm / raw_dwt_cm,
+   #                corrected_sy = storm_precip_cm / corrected_dwt_cm)]
+   #  
+   #  storms <- 
+   #    storms[!is.infinite(corrected_sy) | !is.infinite(raw_sy)]
+   #  
+   #  storms[, `:=`(raw_sy = fifelse(raw_sy > 1, 1, raw_sy),
+   #                corrected_sy = fifelse(corrected_sy > 1, 1, corrected_sy))]
+   #  
+   #  set.seed(1234)
+   #  raw_threshold_mod <- 
+   #    mcp::mcp(model = list(raw_dwt_cm ~ 1, 
+   #                     ~ storm_precip_cm), 
+   #        data = storms)
+   #  
+   #  raw_precip_threshold <- 
+   #    extract_changepoint(raw_threshold_mod)
+   #  
+   #  corrected_threshold_mod <- 
+   #    mcp::mcp(model = list(corrected_dwt_cm ~ 1, 
+   #                     ~ storm_precip_cm), 
+   #        data = storms)
+   #  
+   #  corrected_precip_threshold <- 
+   #    extract_changepoint(corrected_threshold_mod)
+   #  
+   #  corrected_sy_mod <- 
+   #    nls(corrected_sy ~ b + m * exp(c * corrected_compensated_level_cm),
+   #        start = list(b = 0.175, m = 0.005,  c = 0.4),
+   #        data = storms[storm_precip_cm > corrected_precip_threshold])
+   #        # , weights = storms[storm_precip_cm > corrected_precip_threshold, 
+   #        #                  corrected_sy - mean(corrected_sy)]^2)
+   #    
+   #  raw_sy_mod <- 
+   #    nls(raw_sy ~ b + m * exp(c * raw_compensated_level_cm),
+   #        start = list(b = 0.175, m = 0.005,  c = 0.4),
+   #        data = storms[storm_precip_cm > raw_precip_threshold])
+   #        # , weights = storms[storm_precip_cm > raw_precip_threshold, 
+   #        #                  raw_sy - mean(raw_sy)]^2)
+   #  
+   #  # plot(raw_sy ~ raw_compensated_level_cm, data = storms[storm_precip_cm > raw_precip_threshold], col = "red", pch = 19)
+   #  # curve(predict(raw_sy_mod, type = "response", newdata = data.frame(raw_compensated_level_cm = x)), from = -100, to = 20, add = TRUE, col = "red")
+   #  # points(corrected_sy ~ corrected_compensated_level_cm, data = storms[storm_precip_cm > corrected_precip_threshold], col = "blue", pch = 19)
+   #  # curve(predict(corrected_sy_mod, type = "response", newdata = data.frame(corrected_compensated_level_cm = x)), from = -100, to = 20, add = TRUE, col = "blue")
+   #  
+   #  data[, `:=`(corrected_sy = predict(corrected_sy_mod, newdata = .SD),
+   #                    raw_sy = predict(raw_sy_mod, newdata = .SD))]
     
     data
   }

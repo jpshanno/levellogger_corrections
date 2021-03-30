@@ -63,9 +63,10 @@ plan <-
 
     # Calculate water balance components
     water_balance =
-      subset_case_study(data = case_study,
-                        start = "2018-08-09 00:00",
-                        end = "2018-08-23 06:00") %>%
+      # subset_case_study(data = case_study,
+      #                   start = "2018-08-09 00:00",
+      #                   end = "2018-08-23 06:00") %>%
+      case_study %>% 
       calculate_detrended_g() %>%
       calculate_delta_s() %>%
       calculate_et() %>% 
