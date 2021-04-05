@@ -566,7 +566,7 @@ calculate_predicted_values <-
   }
 
 export_correction_models <- 
-  function(models, file.out, generic.ltjr.file = NULL){
+  function(models, instrument.metadata, file.out, generic.ltjr.file = NULL){
     
     median_mods <- 
       models[experiment == "test-dat", 
@@ -575,12 +575,16 @@ export_correction_models <-
              .SDcols = c("intercept", "air_temperature_c", 
                          "water_temperature_c", "delta_at_01c_min")]
     
+    median_mods[, instrument_error_cm := combine_errors(instrument.metadata[serial_number == .BY[[1]], pressure_error_cm], 
+                                                     instrument.metadata[serial_number == .BY[[2]], pressure_error_cm]), 
+                by = .(water_sn, baro_sn)]
+    
     fwrite(median_mods, 
            file.out)
     
     if(!is.null(generic.ltjr.file)){
       generic_mods <- 
-        models[logger_metadata[instrument_type == "LT_Jr",
+        models[instrument.metadata[instrument_type == "LT_Jr",
                                .(serial_number)],
                on = c("water_sn" = "serial_number"), 
                nomatch = NULL]
@@ -825,7 +829,7 @@ create_case_study_panel <-
     panel_data <- 
       data[between(sample_time, 
                          as.POSIXct("2018-08-16 00:00:00", tz = "EST5EDT"), 
-                         as.POSIXct("2018-08-19 23:45:00", tz = "EST5EDT")),
+                         as.POSIXct("2018-08-17 23:45:00", tz = "EST5EDT")),
                  .(sample_time,
                    sample_date = as.Date(sample_time, tz = "EST5EDT"),
                    water_temperature_c,
@@ -918,7 +922,7 @@ create_case_study_panel <-
                     aes(x = sample_time,
                         y = label_y,
                         label = label),
-                    angle = c(18, -12),
+                    angle = c(9, -6),
                     vjust = 0,
                     size = 14*5/14,
                     parse = TRUE) +
@@ -985,7 +989,8 @@ correct_data <-
   function(data, models){
     
     data[models, 
-         error_cm := air_temperature_c * i.air_temperature_c + water_temperature_c * i.water_temperature_c + delta_at_01c_min * i.delta_at_01c_min,
+         `:=`(error_cm = air_temperature_c * i.air_temperature_c + water_temperature_c * i.water_temperature_c + delta_at_01c_min * i.delta_at_01c_min,
+              instrument_error_cm = i.instrument_error_cm),
          on = c("water_sn", "baro_sn")]
     
     data[, corrected_water_level_cm := raw_water_level_cm - error_cm]

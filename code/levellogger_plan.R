@@ -46,6 +46,7 @@ plan <-
     # Export models for use
     final_models = 
       export_correction_models(models = bootstrap_models,
+                               instrument.metadata = instrument_metadata,
                                file.out = file_out("output/tabular/final_correction_model_coefficients.csv")),
 
 
@@ -83,7 +84,11 @@ plan <-
                                   baro.sn = "1066019"),
     
     fig_coefficients_panel = 
-      create_coefficients_panel(bootstrap_models)
+      create_coefficients_panel(bootstrap_models),
+
+    case_study_panel = 
+      create_case_study_panel(case_study, 
+                              file_out("output/figures/case_study_panel.pdf"))
 
 
 # Tables ------------------------------------------------------------------
