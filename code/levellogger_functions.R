@@ -826,6 +826,9 @@ create_coefficients_panel <-
 create_case_study_panel <- 
   function(data, out.path){
     
+    data <- 
+      copy(data[sample_time >= as.POSIXct("2018-05-22 00:00:00")])
+    
     panel_data <- 
       data[between(sample_time, 
                          as.POSIXct("2018-08-16 00:00:00", tz = "EST5EDT"), 
@@ -861,21 +864,32 @@ create_case_study_panel <-
     panel_et_labels <- 
       rbind(panel_data[sample_time == as.POSIXct("2018-08-16 23:45", tz = "EST5EDT"),
                        .(sample_date,
-                         sample_time = sample_time + 3600,
+                         sample_time = sample_time + 2400,
                          label_y = raw_compensated_level_cm + 0.75*(raw_white_cm - raw_compensated_level_cm),
                          label = "Uncorrected~ET")],
             panel_data[sample_time == as.POSIXct("2018-08-16 23:45", tz = "EST5EDT"),
                        .(sample_date,
-                         sample_time = sample_time + 9000,
+                         sample_time = sample_time + 9600,
                          label_y = (corrected_white_cm + corrected_compensated_level_cm) / 2,
                          label = "Corrected~ET")])
     
-    panel <- 
+    error_data <- 
+      data[,.(raw_wl = mean(raw_compensated_level_cm, na.rm = TRUE), 
+              corrected_wl = mean(corrected_compensated_level_cm, na.rm = TRUE),
+              instrument_error_cm = median(instrument_error_cm, na.rm = TRUE)),
+           by = .(sample_date)]
+    
+    error_data[, error_cm := raw_wl - corrected_wl]
+    error_data[, insig_error := ifelse(abs(error_cm) > instrument_error_cm,
+                                       NA_real_, 
+                                       error_cm)]
+    
+    panel <-
       {ggplot(data, aes(x = sample_time)) + 
           geom_rect(aes(xmin = min(panel_data$sample_time),
                         xmax = max(panel_data$sample_time),
-                        ymin = min(panel_data$corrected_compensated_level_cm),
-                        ymax = max(panel_data$corrected_compensated_level_cm)),
+                        ymin = min(data$corrected_compensated_level_cm),
+                        ymax = max(data$corrected_compensated_level_cm)),
                     fill = 'gray80',
                     color = NA) +
           geom_line(aes(y = corrected_compensated_level_cm, 
@@ -890,7 +904,38 @@ create_case_study_panel <-
           scale_linetype_manual(name = NULL, 
                                 values = c(Corrected = 'solid',
                                            Uncorrected = 'dashed')) +
-          ylab("Water Level (cm)")} / 
+          ylab("Water Level (cm)") +
+          scale_x_datetime(date_labels = "%b",
+                           date_breaks = "1 month",
+                           expand = expansion(mult = c(0, 0),
+                                              add = c(0, 0))) +
+          theme_minimal(base_size = 20) +
+          theme(plot.margin = margin(0, 0, b = 0, 0, unit = 'points'))} / 
+      { ggplot(error_data) + 
+          aes(x = sample_date, y = error_cm) + 
+          geom_col(color = NA, width = 1, fill = 'gray50') +
+          geom_col(aes(y = insig_error),
+                   color = NA,
+                   width = 1,
+                   fill = 'gray70') +
+          geom_ribbon(aes(ymin = -instrument_error_cm,
+                          ymax = instrument_error_cm),
+                      fill = NA,
+                      linetype = 'dashed',
+                      color = 'black') +
+          geom_rect(aes(xmin = min(as.Date(panel_data$sample_time, tz = "EST5EDT")),
+                        xmax = max(as.Date(panel_data$sample_time, tz = "EST5EDT")),
+                        ymin = min(error_data$error_cm),
+                        ymax = max(error_data$error_cm)),
+                    fill = 'gray80',
+                    color = NA) +
+          labs(y = "Error (cm)") +
+          scale_x_date(labels = NULL,
+                       date_breaks = "1 month",
+                       expand = expansion(mult = c(0, 0),
+                                          add = c(0, 0))) +
+          theme_minimal(base_size = 20) +
+          theme(plot.margin = margin(0, 0, b = 0, 0, unit = 'points'))} / 
       {ggplot(panel_data) +
           aes(x = sample_time) +
           geom_line(aes(y = corrected_compensated_level_cm)) + 
@@ -914,15 +959,15 @@ create_case_study_panel <-
           geom_segment(data = panel_data[, last(.SD), by = sample_date],
                        aes(y = corrected_compensated_level_cm,
                            yend = corrected_white_cm,
-                           x = sample_time + 9000,
-                           xend = sample_time + 9000),
+                           x = sample_time + 9600,
+                           xend = sample_time + 9600),
                        arrow = arrow(angle = 90, ends = 'both', length = unit(0.25, "lines")),
                        color = 'gray20') +
           geom_text(data = panel_g_labels,
                     aes(x = sample_time,
                         y = label_y,
                         label = label),
-                    angle = c(9, -6),
+                    angle = c(18, -12),
                     vjust = 0,
                     size = 14*5/14,
                     parse = TRUE) +
@@ -936,28 +981,28 @@ create_case_study_panel <-
                     parse = TRUE) +
           facet_wrap(~sample_date,
                      scales = "free",
-                     nrow = 1,
-                     strip.position = 'bottom') + 
+                     nrow = 1) + 
           ylab("Water Level (cm)") +
           scale_x_datetime(breaks = seq(as.POSIXct("2018-08-13 06:00:00", tz = "EST5EDT"), 
                                         as.POSIXct("2018-08-20 18:00:00", tz = "EST5EDT"), 
                                         by = 12*3600),
                            date_labels = "%H:%M", 
                            expand = expansion(mult = c(0, 0),
-                                              add = c(0, 3600)))} +
+                                              add = c(0, 3600))) +
+        theme_minimal(base_size = 20)} +
+      plot_layout(heights = c(0.4, 0.2, 0.4)) +
       plot_annotation(tag_levels = "A") &
-      theme_minimal(base_size = 20) +
-      theme(strip.placement = 'outside',
-            axis.title.x = element_blank(),
-            legend.position = c(0.08, 0.22),
+      theme(axis.title.x = element_blank(),
+            legend.text = element_text(size = rel(0.75)),
+            legend.position = c(0.14, 0.22),
             legend.background = element_rect(fill = 'white',
                                              color = NA),
             legend.margin = margin(0, 0, 0, 0))
     
     ggsave(plot = panel,
            filename = out.path,
-           width = 16,
-           height = 8)
+           width = 7.5,
+           height = 9)
   }
 
 # Case Study Functions ----------------------------------------------------
