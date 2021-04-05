@@ -60,6 +60,7 @@ loadd(combined_data)
 loadd(bootstrap_models)
 loadd(predicted)
 loadd(fitted)
+loadd(water_balance)
 ```
 
 ```{r keypoints_check, echo=FALSE, results='asis', eval = TRUE}
@@ -86,6 +87,34 @@ compounding
 Figure 3: Add panel C showing what is in Panel 4. Panel A + Panel B = Panel C.
 Panel B shows no pattern and errors within range of instrument error, might be
 good to build up into a relationship for Figure 1
+
+Check McLaughlin & Cuevas papers & 'conclusion' of temp differences
+
+Expand figure 1 caption to describe experimental period, serial numbers, etc
+
+Rename experimental periods "GW-Best Practices" = "stat-dis"
+
+groundwater, best practices stable temperatures (such as groundwater)
+groundwater, unsound practices vs groundwater, temperature-biased practices
+surfacewater, best practices
+surfacewater, unsound practices
+
+Introduction is very technical -> add more about monitoring scenarios or another
+way to tie it into people's experience
+
+Make cross-sectional diagram of experiment
+
+Specify that air temperature is likely the stronger gradient in most monitoring
+scenarios
+
+Swap grays for instrument and propagated error in time series figure
+
+When creating backfill equations for external and solinst baro data, the models
+between residuals and air temperature show similar slopes as those found in the
+final bootstrap median models
+
+Potentially show that it is possible to use previous correction data for new
+loggers of the same model
 
 # Introduction
 
@@ -163,7 +192,7 @@ a known water depth for each pair of air and water transducers. By developing a
 single multi-variate correction we can avoid the need to determine a suitable 
 reference pressure measurement or utilize a pressure chamber.
 
-```{r drivers-panel, fig.cap="Error is driven by a combination of individual transducer errors, which can result in masking by the stronger trend. Panel A shows water level error as a function of air temperature, illustrating a strong linear trend. Panel B shows very little relationship between raw water level error and water temperature. Panel C is the relationship between error and water temperature after the influence of air temperature has been removed via OLS linear regression.", fig.asp=0.33, fig.height = 3}
+```{r drivers-panel, fig.cap="Error is driven by a combination of individual transducer errors, which can result in masking by the stronger trend. Panel A shows water level error as a function of air temperature, illustrating a strong linear trend. Panel B shows very little relationship between raw water level error and water temperature. Panel C is the relationship between error and water temperature after the influence of air temperature has been removed via OLS linear regression. Data taken from a single pair of pressure transducers in this study.", fig.asp=0.33, fig.height = 3}
 loadd(fig_drivers_panel)
 fig_drivers_panel
 
@@ -302,11 +331,10 @@ intervals.
 ## Water Level Compensation
 
 All of the sensors used in this study are designed to measure pressure at a
-relatively constant temperature and utilize a fixed water density of 1000 $kg
-m^{-3}$ to convert pressure to depth (Personal Communication, Solinst). To
+relatively constant temperature and utilize a fixed water density of 1000 $kg m^{-3}$ to convert pressure to depth (Personal Communication, Solinst). To
 account for the larger range of temperatures observed in this study the recorded
 pressure was adjusted to account for the variable density of water. 
-$$P_{c} = P\;\mathsf{x}\;\frac{\rho_o}{\rho_T}$$ 
+$$P_{c} = P\;*\;\frac{\rho_o}{\rho_T}$$ 
 where $\rho_T$ is the density of water ($kg m^) as a
 function of temperature taken from [@tanaka-2001, Eq. 1], $\rho_o$ is the assumed
 density of water (1000 $kgm^{-3}$, and _P_ and $P_c$ are the observed and 
@@ -340,9 +368,10 @@ known water depth. To account for the uncertainty of instrument error in the
 temperature compensation models, Equation 2 was fit repeatedly using a two-stage
 parametric bootstrapping approach [@buonaccorsi-2010]. The two-stage bootstrap
 first samples the observed data with replacement to create a data set of equal
-size as the observations. For each sampled coordinate ($Y, X_1, X_2, X_3$) error
+size as the observations. For each sampled coordinate ($Y, X_1, X_2, X_3$) 
+additional random error
 is added to each term, drawn from a normal distribution centered on zero with
-standard deviation equal to the known instrument error for each variable (Table
+standard deviation equal to the known instrument accuracy for each variable (Table
 \@ref(tab:loggers)). For each transducer pair 1000 models were run.
 
 $$\epsilon_L^* = \epsilon_L + N(0, \sigma_{L'});\;\sigma_{L'} = \sqrt{2\sigma_L^2}$$
@@ -432,6 +461,52 @@ bounds. The new accuracy bounds were then tested against the instrument error
 bounds using a paired t-test. To avoid artificially inflating significance
 through high *n* all t-tests were performed between the fixed instrument error
 band and the mean propagated error band to hold $n=36$ within each experiment.
+
+## Case Study
+
+We applied the proposed correction protocol to observed wetland water level data
+to highlight propagation of uncorrected errors into subsequent analyses. The 
+data for this case study comes from a headwater wetland (0.81 ha) in the western
+Upper Peninsula of Michigan, USA. The data were collected during the ice-free
+season of 2018. Levellogger 1066016 was deployed in a 5.08cm I.D. monitoring 
+well and levellogger 1065861 was deployed in a sheltered open air area. Both
+loggers recorded synchronous 15-minute data, further details are available in
+@vangrinsven-2017. In the described deployment scenarios from above this would
+be unsound groundwater monitoring. We will illustrate the impact of temperature 
+bias on two common analyses: mean daily water level and evapotranspiration 
+derived from diurnal water level variation. For the former analysis we calculate
+mean uncorrected and corrected water levels on a daily timestep and compare the
+difference between them.  
+
+An approach for decomposing daily groundwater level records into
+evapotranspiration and groundwater recharge was first proposed by @white-1932.
+The approach involves estimating net inflow rate during a recharge period
+typically the pre-dawn hours. This rate and the change in water level between
+recharge periods can be used to determine evapotranspiration. Converting water
+level fluctuation to surface evapotranspiration also requires accounting for the
+specific yield of the substrate surrounding the well. Loheide [-@loheideii-2008;
+-@loheideii-2005] expanded this work to improve estimates of specific yield and
+account for variation in groundwater flow with water level change. The White and
+Loheide works focused on groundwater-phreatophyte interactions, but the method
+has been extended to use in wetland settings [@diamond-2018; @mclaughlin-2014;
+@telander-2015]. In these setting Loheide's readily available specific yield was
+expanded to ecosystem specific yield to acknowledge the influence of factors
+beyond the substrate surrounding the well [@mclaughlin-2014]. We applied the
+adjusted White methodology to the 15-minute wetland well data to calculate daily
+evapotranspiration for the corrected and uncorrected water level records. Our
+estimates of ecosystem specific yield were derived as the ratio between the
+change in water level and the change in water availability (precipitation plus
+snowmelt less potential evapotranspiration). This is the inverse analog of rain
+to rise ratio used in other studies [@mclaughlin-2014]. We used this analogous
+approach because our site is influenced by two factors known to obfuscate a
+clear ecosystem specific yield relationship: surface water exchange
+[@watras-2017] and additional hydrologic cycles at longer wavelengths (e.g.
+seasonal inundation patterns) [@zhu-2011]. For validation of the correction
+procedure We compared the corrected and uncorrected estimates to potential
+evapotranspiration (PET) calculated using the modified Hargreaves-Samani
+equation @hargreaves-2003 with data from nearby meteorological stations
+(Shannon, in preparation).
+
 
 ## Software
 All data processing and analysis was performed in R [@rcoreteam-2019] using the
@@ -655,6 +730,43 @@ found to be significantly less than the instrument error (mean
 propagated errors that were significantly higher than instrument error (mean 
 `r vardissign[["1065861"]]` in 95% confidence bounds = 
 `r abs(vardistests[["1065861"]])`cm).
+
+## Case Study
+
+```{r}
+
+daily_wl_comparisons <- 
+  water_balance[,.(raw_wl = mean(raw_compensated_level_cm, na.rm = TRUE), 
+                   corrected_wl = mean(corrected_compensated_level_cm, na.rm = TRUE),
+                   instrument_error_cm = median(instrument_error_cm, na.rm = TRUE)),
+                by = .(sample_date)][, error_cm := raw_wl - corrected_wl]
+
+daily_wl_errors_n_days <- 
+  sum(daily_wl_comparisons$error_cm > daily_wl_comparisons$instrument_error_cm)
+
+daily_wl_errors_percent <- 
+  paste(round(daily_wl_errors_n_days / daily_wl_comparisons, 1), '%')
+
+```
+
+
+When mean raw and corrected water levels are compared `r daily_wl_errors_n_days`
+days (`r daily_wl_errors_percent`) were found to have temperature corrections
+that exceeded combined instrument error (Figure \@ref(fig:case-study-panel)).
+Daily mean errors were greatest in the fall, and smallest during the summer
+months, ranging up to a 4 cm overestimation of mean daily water level.
+
+Need to evaluate Esy equation for corrected and uncorrected (visually they look
+about the same)
+
+The days highlighted in the panel (with likely flawed estimates
+of ET) show a mean difference less than instrument error
+
+```{r case-study-panel, fig.width=7.5, fig.cap='A comparison of corrected and uncorrected wetland water levels. Panel A shows the entire growing season at 15-minute interval. Panel B shows the error in daily mean water level. The vertical shaded bar in Panels A and B highlight the two days shown in Panel C. Panel C shows details of two diurnal water level cycles and the decomposed components of the @white-1932 method.'}
+knitr::include_graphics("../output/figures/case_study_panel.pdf")
+```
+
+
 
 # Discussion
 
@@ -961,7 +1073,10 @@ accounting for instrumentation differences or methodology. The comparisons do
 show that the magnitude of temperature-derived uncertainty is not insignificant
 in the scale of diurnal signals studied.
 
-
+_Figure FFF2: A week of corrected and raw water level data from one of our sites.
+Also plot PET estimates, and show how the water level error is well-correlated 
+with PET. Include a second panel that shows the relationship between known error
+and PET._
 _Figure FFF: Point-range plots of published water level fluctuation rates with
 various uncertainty intervals from this study added as thresholds for comparison_
 
@@ -976,6 +1091,19 @@ various uncertainty intervals from this study added as thresholds for comparison
 
 <!-- I cannot compare if the water level errors are of fixed magnitude or percentage -->
 <!-- based. I could make some educated guess from the barometric transducers though. -->
+
+## Case Study
+
+Larger errors in the fall can be explained by seasonal temperature patterns. In
+spring air is cold and water is cold from snowmelt. In fall air is cold, but 
+water is warmer due to rain & groundwater as sources, rather than recent 
+snowmelt.
+
+There are not enough calibration measurements to truly analyze which daily mean
+is 'correct', but based on the experiment in this study we are working from the
+assumption that the temperature-corrected values are. The second analysis is
+easier to evaluate because we can compare the results to the relationship with 
+PET. 
 
 # Conclusion and Recommendations
 
