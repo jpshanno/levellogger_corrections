@@ -1110,17 +1110,43 @@ smooth_data <-
     data
   }
 
+add_met_data <- 
+  function(data,
+           met.path){
+    
+    met <- 
+      read_fst(met.path, as.data.table = TRUE)
+    
+    met <-
+      met[site == "152" & sample_year == 2018, 
+          .(sample_date, pet_cm = -pet_cm, total_input_cm, 
+            ytd_water_balance = cumsum(rain_cm + pet_cm + melt_cm))]
+
+    data[met, 
+        on = c("sample_date"), 
+        `:=`(pet_cm_d = i.pet_cm,
+             total_input_cm_d = i.total_input_cm,
+             ytd_water_balance = i.ytd_water_balance)]
+    
+    data
+  }
+
 calculate_sy <- 
   function(data){
     
     # ESy function & min.esy taken from climate_impacts
-    esy_function <- 
-      function (wl = NULL, min.esy = 1.00046) 
-        pmax(min.esy, 9.86792148868664 - (9.86792148868664 - 2.39189118793206) * 
+    esy_function <-
+      function (wl = NULL, min.esy = 1.00046)
+        pmax(min.esy, 9.86792148868664 - (9.86792148868664 - 2.39189118793206) *
                exp(0.00983144846311064 * wl))
     
-    data[, `:=`(corrected_sy = 1/esy_function(corrected_compensated_level_cm),
-                raw_sy = 1/esy_function(raw_compensated_level_cm))]
+    esy_functions <- 
+      build_esy_functions(data)
+    
+    data[, `:=`(external_raw_sy = 1 / esy_function(raw_compensated_level_cm, 1),
+                external_corrected_sy = 1 / esy_function(corrected_compensated_level_cm, 1),
+                corrected_sy = 1/esy_functions['corrected', pred_fun[[1]]](corrected_compensated_level_cm, 1),
+                raw_sy = 1/esy_functions['raw', pred_fun[[1]]](raw_compensated_level_cm, 1))]
    
     data
   }

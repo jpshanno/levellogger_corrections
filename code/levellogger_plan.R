@@ -60,7 +60,8 @@ plan <-
       compensate_data(calibration.data = file_in("data/case_study/calibration_data.csv")) %>%
       smooth_data(n = 13, "raw_compensated_level_cm", "corrected_compensated_level_cm") %>%
       calculate_sy() %>%
-      subset_year(year = 2018),
+      subset_year(year = 2018) %>%
+      add_met_data(file_in("../Climate_Change_Impacts/_targets/objects/water_budget")) %>% 
 
     # Calculate water balance components
     water_balance =
