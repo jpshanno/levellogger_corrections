@@ -884,6 +884,9 @@ create_case_study_panel <-
                                        NA_real_, 
                                        error_cm)]
     
+    base_font <- 
+      14
+    
     panel <-
       {ggplot(data, aes(x = sample_time)) + 
           geom_rect(aes(xmin = min(panel_data$sample_time),
@@ -909,32 +912,51 @@ create_case_study_panel <-
                            date_breaks = "1 month",
                            expand = expansion(mult = c(0, 0),
                                               add = c(0, 0))) +
-          theme_minimal(base_size = 20) +
-          theme(plot.margin = margin(0, 0, b = 0, 0, unit = 'points'))} / 
+          theme_minimal(base_size = base_font) +
+          theme(plot.margin = margin(0, 0, b = 0, 0, unit = 'points'),
+                axis.text.x = element_text(margin = margin(2, 0, 0, 0, unit = 'lines')))} / 
       { ggplot(error_data) + 
           aes(x = sample_date, y = error_cm) + 
-          geom_col(color = NA, width = 1, fill = 'gray50') +
-          geom_col(aes(y = insig_error),
-                   color = NA,
-                   width = 1,
-                   fill = 'gray70') +
+          annotate("text", 
+                   x = as.Date("2018-06-15"),
+                   y = 2,
+                   label = "Instrument Error",
+                   size = 0.8 * base_font * 5/14,
+                   vjust = 0) +
+          annotate("curve",
+                   x = as.Date("2018-07-01"),
+                   xend = as.Date("2018-07-10"),
+                   y = 2,
+                   yend = unique(error_data$instrument_error_cm) * 2,
+                   arrow = arrow(length = unit(6, 'points'),
+                                 type = 'closed'),
+                   # angle = 100,
+                   curvature = -0.5) +
+          geom_rect(aes(xmin = min(as.Date(panel_data$sample_time, tz = "EST5EDT")),
+                        xmax = 1 + max(as.Date(panel_data$sample_time, tz = "EST5EDT")),
+                        ymin = min(error_data$error_cm),
+                        ymax = max(error_data$error_cm)),
+                    fill = 'gray80',
+                    color = NA) +
+          geom_col(aes(fill = ifelse(abs(error_cm) <= instrument_error_cm, "insig", "sig"),
+                       color = ifelse(abs(error_cm) <= instrument_error_cm, "insig", "sig")), 
+                   width = 0.4,
+                   show.legend = FALSE) +
           geom_ribbon(aes(ymin = -instrument_error_cm,
                           ymax = instrument_error_cm),
                       fill = NA,
                       linetype = 'dashed',
                       color = 'black') +
-          geom_rect(aes(xmin = min(as.Date(panel_data$sample_time, tz = "EST5EDT")),
-                        xmax = max(as.Date(panel_data$sample_time, tz = "EST5EDT")),
-                        ymin = min(error_data$error_cm),
-                        ymax = max(error_data$error_cm)),
-                    fill = 'gray80',
-                    color = NA) +
-          labs(y = "Error (cm)") +
+          scale_fill_manual(values = c(sig = 'gray50',
+                                       insig = 'gray70')) +
+          scale_color_manual(values = c(sig = 'gray50',
+                                       insig = 'gray70')) +
+          labs(y = "Error in Daily\nMeans (cm)") +
           scale_x_date(labels = NULL,
                        date_breaks = "1 month",
                        expand = expansion(mult = c(0, 0),
                                           add = c(0, 0))) +
-          theme_minimal(base_size = 20) +
+          theme_minimal(base_size = base_font) +
           theme(plot.margin = margin(0, 0, b = 0, 0, unit = 'points'))} / 
       {ggplot(panel_data) +
           aes(x = sample_time) +
@@ -969,7 +991,7 @@ create_case_study_panel <-
                         label = label),
                     angle = c(18, -12),
                     vjust = 0,
-                    size = 14*5/14,
+                    size = 0.8*base_font*5/14,
                     parse = TRUE) +
           geom_text(data = panel_et_labels,
                     aes(x = sample_time,
@@ -977,7 +999,7 @@ create_case_study_panel <-
                         label = label),
                     angle = 90,
                     vjust = -0.15,
-                    size = 14*5/14,
+                    size = 0.8*base_font*5/14,
                     parse = TRUE) +
           facet_wrap(~sample_date,
                      scales = "free",
@@ -989,7 +1011,7 @@ create_case_study_panel <-
                            date_labels = "%H:%M", 
                            expand = expansion(mult = c(0, 0),
                                               add = c(0, 3600))) +
-        theme_minimal(base_size = 20)} +
+        theme_minimal(base_size = base_font)} +
       plot_layout(heights = c(0.4, 0.2, 0.4)) +
       plot_annotation(tag_levels = "A") &
       theme(axis.title.x = element_blank(),
