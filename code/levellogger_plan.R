@@ -71,6 +71,21 @@ plan <-
       adjust_water_balance() %>% 
       drop_trailing_data("2018-08-23"),
 
+    daily_water_balance =
+      water_balance %>% 
+      expand_instantaneous_rates(reg.exp = "(in|dwt|et)_cm_s") %>% 
+      summarize_by_day(mean = c("corrected_compensated_level_cm",
+                                "raw_compensated_level_cm"),
+                       sum = c("raw_et_cm_15m",
+                               "corrected_et_cm_15m"),
+                       first = c("total_input_cm_d",
+                                 "pet_cm_d")) %>% 
+      transform(dry_day = frollapply(total_input_cm_d, 
+                                     n = 3, 
+                                     FUN = max,
+                                     align = 'right', 
+                                     na.rm = TRUE) < 0.1),
+
 # Figures -----------------------------------------------------------------
 
     fig_drivers_panel = 
