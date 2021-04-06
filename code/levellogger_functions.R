@@ -1362,7 +1362,9 @@ calculate_detrended_g <-
     #            corrected_Gamma_cm_s = corrected_gamma_m * as.numeric(sample_time))]
         
     data[, `:=`(raw_net_in_cm_s = raw_sy * (raw_Gamma_cm_s - raw_detrend_m_cm_s),
-                corrected_net_in_cm_s = corrected_sy * (corrected_Gamma_cm_s + corrected_detrend_m_cm_s))]
+                corrected_net_in_cm_s = corrected_sy * (corrected_Gamma_cm_s + corrected_detrend_m_cm_s),
+                external_raw_net_in_cm_s = external_raw_sy * (raw_Gamma_cm_s - raw_detrend_m_cm_s),
+                external_corrected_net_in_cm_s = external_corrected_sy * (corrected_Gamma_cm_s + corrected_detrend_m_cm_s))]
     
     data[]
   }
@@ -1402,7 +1404,9 @@ calculate_delta_s <-
 calculate_et <- 
   function(data){
     data[, `:=`(raw_et_cm_s = raw_net_in_cm_s - raw_sy * raw_dwt_cm_s,
-                corrected_et_cm_s = corrected_net_in_cm_s - corrected_sy * corrected_dwt_cm_s)]
+                corrected_et_cm_s = corrected_net_in_cm_s - corrected_sy * corrected_dwt_cm_s,
+                external_raw_et_cm_s = external_raw_net_in_cm_s - external_raw_sy * raw_dwt_cm_s,
+                external_corrected_et_cm_s = external_corrected_net_in_cm_s - external_corrected_sy * corrected_dwt_cm_s)]
     
     data <- 
       smooth_data(data, "raw_et_cm_s", "corrected_et_cm_s", n = 13)
@@ -1417,17 +1421,165 @@ adjust_water_balance <-
          `:=`(raw_et_cm_s = raw_et_cm_s - raw_et_cm_s,
               raw_net_in_cm_s = raw_net_in_cm_s - raw_et_cm_s)]
     
+    data[external_raw_et_cm_s < 0,
+         `:=`(external_raw_et_cm_s = external_raw_et_cm_s - external_raw_et_cm_s,
+              external_raw_net_in_cm_s = external_raw_net_in_cm_s - external_raw_et_cm_s)]
+    
     data[corrected_et_cm_s < 0,
          `:=`(corrected_et_cm_s = corrected_et_cm_s - corrected_et_cm_s,
               corrected_net_in_cm_s = corrected_net_in_cm_s - corrected_et_cm_s)]
     
+    data[external_corrected_et_cm_s < 0,
+         `:=`(external_corrected_et_cm_s = external_corrected_et_cm_s - external_corrected_et_cm_s,
+              external_corrected_net_in_cm_s = external_corrected_net_in_cm_s - external_corrected_et_cm_s)]
+    
     data
   }
+
+expand_instantaneous_rates <- 
+  function(data, reg.exp){
+    
+    instantaneous_columns <- 
+      str_subset(names(data), reg.exp)
+  
+    for(n in instantaneous_columns){
+      set(x = data, j = n, value = data[[n]] * 900)
+      setnames(data, n, str_replace(n, "_s$", "_15m"))
+    }
+      
+    data
+  }
+
+summarize_by_day <- 
+  function(data, ..., na.rm = TRUE){
+    
+    stopifnot("sample_date" %in% names(data))
+    
+    args <- 
+      list(...)
+    
+    data <- 
+      imap(args,
+           ~data[, map(subset(.SD, select = .x), function(X)do.call(.y, args = list(X, na.rm = na.rm))),
+                 by = .(sample_date)]) %>% 
+      reduce(merge,
+             by = "sample_date")
+    
+    setnames(data, function(x)str_replace(x, "15m$", "d"))
+    
+    data
+    }
+
 
 drop_trailing_data <- 
   function(data, drop.date){
     data[sample_date != as.Date(drop.date, tz = "EST5EDT")]
   }
+
+quad <- 
+  function(wa, b0, b1, b2){
+    b0 + b1*wa + b2*wa^2
+  }
+
+quad_prime <- 
+  function(mod = NULL, wa, b1, b2){
+    if(!is.null(mod)){
+      b1 <- coef(mod)[["b1"]]
+      b2 <- coef(mod)[["b2"]]
+    }
+    b1 + b2 * 2 * wa
+  }
+
+build_esy_functions <- 
+  function(data){
+
+    drawdown <- 
+      melt(data,
+           measure.vars = patterns("compensated_level_cm"), 
+           id.vars = c("sample_date", "ytd_water_balance"),
+           variable.name = 'type',
+           value.name = 'compensated_level_cm'
+      )
+    
+    drawdown <- 
+      drawdown[, .SD[(.SD[1:which.min(compensated_level_cm), which.max(compensated_level_cm)]):which.min(compensated_level_cm)],
+               by = .(type)]
+    
+    drawdown[, type := str_extract(type, "^[a-z]+")]
+    
+    drawdown[, 
+             c("drawdown_emp", "esy_emp",
+               "esy_x_intercept") := {
+                 
+                 mod <- 
+                   robustbase::nlrob(compensated_level_cm ~ b0 + b1*ytd_water_balance + b2*ytd_water_balance^2,
+                                     data = .SD, 
+                                     na.action = na.exclude,
+                                     maxit = 50,
+                                     start = list(b0 = 8, b1 = 1, b2 = -1))
+                 
+                 list(drawdown_emp = predict(mod, newdata = .SD),
+                      esy_emp = quad_prime(mod = mod, wa = .SD[, ytd_water_balance]))
+                 
+               },
+             by = .(type)]
+    
+    esy_form <- 
+      bf(esy_emp ~ a - (a - b) * exp (c * compensated_level_cm),
+         a + b + c ~ 0 + type,
+         nl = TRUE)
+    
+    esy_priors <- 
+      prior(nlpar = "a", normal(10, 0.5), lb = 0) +
+      prior(nlpar = "b", normal(2, 0.25), lb = 0) +
+      prior(nlpar = "c", normal(0.01, 0.002), lb = 0) +
+      prior(gamma(2, .1), class = nu)
+    
+    brm_esy <- 
+      brm(esy_form,
+          prior = esy_priors,
+          family = student,
+          cores = 4,
+          save_model = "output/models/esy_model.stan", 
+          data = drawdown[!is.na(compensated_level_cm)])
+    
+    esy_coefs <- 
+      fixef(brm_esy)
+    
+    esy_a <- 
+      esy_coefs[str_detect(rownames(esy_coefs), "a_"), "Estimate"] %>% 
+      set_names(~str_extract(., "(?<=type)[a-z]+"))
+    
+    esy_b <- 
+      esy_coefs[str_detect(rownames(esy_coefs), "b_"), "Estimate"] %>% 
+      set_names(~str_extract(., "(?<=type)[a-z]+"))
+    
+    esy_c <- 
+      esy_coefs[str_detect(rownames(esy_coefs), "c_"), "Estimate"] %>% 
+      set_names(~str_extract(., "(?<=type)[a-z]+"))
+    
+    drawdown[, `:=`(a = esy_a[[.BY[[1]]]],
+                    b = esy_b[[.BY[[1]]]],
+                    c = esy_c[[.BY[[1]]]]), 
+             by = .(type)]
+    
+    drawdown[, esy_hat := a - (a - b) * exp (c * compensated_level_cm)]
+    
+    esy_functions <- 
+      drawdown[, 
+               .(pred_fun = list(as.function(list(wl = NULL, 
+                                                  min.esy = NULL,
+                                                  bquote(pmax(min.esy,
+                                                              .(a) - (.(a) - .(b)) * exp (.(c) * wl)),
+                                                         where = .SD[1, .(a, b, c)]))))),
+               keyby = .(type)]
+    
+    # curve(esy_functions["raw", pred_fun[[1]]](x, 1), from = -100, 20, lty = 2)
+    # curve(esy_functions["corrected", pred_fun[[1]]](x, 1), from = -100, 20, col = 'blue', add = TRUE)
+    
+    esy_functions
+  }
+
 
 # Helper Functions --------------------------------------------------------
 

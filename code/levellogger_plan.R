@@ -53,15 +53,14 @@ plan <-
 # Case Study --------------------------------------------------------------
 
     # Load and compensate case study data
-    # REMEMBER TO SET TIMEZONE
     case_study =
       load_case_study(data = file_in("data/case_study/example_data.csv")) %>% 
       correct_data(models = final_models) %>% 
       compensate_data(calibration.data = file_in("data/case_study/calibration_data.csv")) %>%
       smooth_data(n = 13, "raw_compensated_level_cm", "corrected_compensated_level_cm") %>%
-      calculate_sy() %>%
       subset_year(year = 2018) %>%
       add_met_data(file_in("../Climate_Change_Impacts/_targets/objects/water_budget")) %>% 
+      calculate_sy(),
 
     # Calculate water balance components
     water_balance =
