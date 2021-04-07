@@ -1118,13 +1118,18 @@ add_met_data <-
       read_fst(met.path, as.data.table = TRUE)
     
     met <-
-      met[site == "152" & sample_year == 2018, 
-          .(sample_date, pet_cm = -pet_cm, total_input_cm, 
-            ytd_water_balance = cumsum(rain_cm + pet_cm + melt_cm))]
-
+      met[site == "152" & water_year == 2018]
+    
+    met[, ytd_water_balance := cumsum(rain_cm + pet_cm + melt_cm)]
+    met[, ytd_water_balance := ytd_water_balance - max(ytd_water_balance, na.rm = TRUE)]
+    
     data[met, 
         on = c("sample_date"), 
-        `:=`(pet_cm_d = i.pet_cm,
+        `:=`(tmin_c = i.tmin_c,
+             tmax_c = i.tmax_c,
+             melt_cm = i.melt_cm,
+             rain_cm = i.rain_cm,
+             pet_cm_d = i.pet_cm,
              total_input_cm_d = i.total_input_cm,
              ytd_water_balance = i.ytd_water_balance)]
     
@@ -1135,7 +1140,7 @@ calculate_sy <-
   function(data){
     
     # ESy function & min.esy taken from climate_impacts
-    esy_function <-
+    external_esy_function <-
       function (wl = NULL, min.esy = 1.00046)
         pmax(min.esy, 9.86792148868664 - (9.86792148868664 - 2.39189118793206) *
                exp(0.00983144846311064 * wl))
@@ -1143,10 +1148,10 @@ calculate_sy <-
     esy_functions <- 
       build_esy_functions(data)
     
-    data[, `:=`(external_raw_sy = 1 / esy_function(raw_compensated_level_cm, 1),
-                external_corrected_sy = 1 / esy_function(corrected_compensated_level_cm, 1),
-                corrected_sy = 1/esy_functions['corrected', pred_fun[[1]]](corrected_compensated_level_cm, 1),
-                raw_sy = 1/esy_functions['raw', pred_fun[[1]]](raw_compensated_level_cm, 1))]
+    data[, `:=`(external_raw_sy = 1 / external_esy_function(raw_compensated_level_cm),
+                external_corrected_sy = 1 / external_esy_function(corrected_compensated_level_cm),
+                corrected_sy = 1/esy_functions['corrected', pred_fun[[1]]](corrected_compensated_level_cm),
+                raw_sy = 1/esy_functions['raw', pred_fun[[1]]](raw_compensated_level_cm))]
    
     data
   }
@@ -1501,9 +1506,8 @@ build_esy_functions <-
            value.name = 'compensated_level_cm'
       )
     
-    drawdown <- 
-      drawdown[, .SD[(.SD[1:which.min(compensated_level_cm), which.max(compensated_level_cm)]):which.min(compensated_level_cm)],
-               by = .(type)]
+    drawdown[, .SD[1:which.min(compensated_level_cm)],
+             by = .(type)]
     
     drawdown[, type := str_extract(type, "^[a-z]+")]
     
@@ -1512,11 +1516,14 @@ build_esy_functions <-
                "esy_x_intercept") := {
                  
                  mod <- 
-                   robustbase::nlrob(compensated_level_cm ~ b0 + b1*ytd_water_balance + b2*ytd_water_balance^2,
+                   nlrob(compensated_level_cm ~ b0 + b1*ytd_water_balance + b2*ytd_water_balance^2,
                                      data = .SD, 
                                      na.action = na.exclude,
                                      maxit = 50,
-                                     start = list(b0 = 8, b1 = 1, b2 = -1))
+                                     algorithm = 'port',
+                                     start = list(b0 = 8, b1 = 1, b2 = -1),
+                                     lower = list(b0 = -Inf, b1 = 0, b2 = -Inf),
+                                     upper = list(b0 = Inf, b1 = Inf, b2 = 0))
                  
                  list(drawdown_emp = predict(mod, newdata = .SD),
                       esy_emp = quad_prime(mod = mod, wa = .SD[, ytd_water_balance]))
@@ -1524,60 +1531,49 @@ build_esy_functions <-
                },
              by = .(type)]
     
-    esy_form <- 
-      bf(esy_emp ~ a - (a - b) * exp (c * compensated_level_cm),
-         a + b + c ~ 0 + type,
-         nl = TRUE)
+    # ggplot(drawdown) + 
+    #   aes(x = ytd_water_balance, y = compensated_level_cm) + 
+    #   geom_point() + 
+    #   geom_line(aes(y = drawdown_emp), 
+    #             color = 'red') +
+    #   facet_wrap(~type)
     
-    esy_priors <- 
-      prior(nlpar = "a", normal(10, 0.5), lb = 0) +
-      prior(nlpar = "b", normal(2, 0.25), lb = 0) +
-      prior(nlpar = "c", normal(0.01, 0.002), lb = 0) +
-      prior(gamma(2, .1), class = nu)
+    # ggplot(drawdown) +
+    #   aes(x = compensated_level_cm,
+    #       y = esy_emp) +
+    #   geom_point() +
+    #   geom_function(fun = ~pmax(1, 9.86792148868664 - (9.86792148868664 - 2.39189118793206) *
+    #                               exp(0.00983144846311064 * .x)),
+    #                             color = 'red') +
+    #   facet_wrap(~type)
     
-    brm_esy <- 
-      brm(esy_form,
-          prior = esy_priors,
-          family = student,
-          cores = 4,
-          save_model = "output/models/esy_model.stan", 
-          data = drawdown[!is.na(compensated_level_cm)])
-    
-    esy_coefs <- 
-      fixef(brm_esy)
-    
-    esy_a <- 
-      esy_coefs[str_detect(rownames(esy_coefs), "a_"), "Estimate"] %>% 
-      set_names(~str_extract(., "(?<=type)[a-z]+"))
-    
-    esy_b <- 
-      esy_coefs[str_detect(rownames(esy_coefs), "b_"), "Estimate"] %>% 
-      set_names(~str_extract(., "(?<=type)[a-z]+"))
-    
-    esy_c <- 
-      esy_coefs[str_detect(rownames(esy_coefs), "c_"), "Estimate"] %>% 
-      set_names(~str_extract(., "(?<=type)[a-z]+"))
-    
-    drawdown[, `:=`(a = esy_a[[.BY[[1]]]],
-                    b = esy_b[[.BY[[1]]]],
-                    c = esy_c[[.BY[[1]]]]), 
-             by = .(type)]
-    
-    drawdown[, esy_hat := a - (a - b) * exp (c * compensated_level_cm)]
-    
-    esy_functions <- 
+    esy_mods <- 
       drawdown[, 
-               .(pred_fun = list(as.function(list(wl = NULL, 
-                                                  min.esy = NULL,
-                                                  bquote(pmax(min.esy,
-                                                              .(a) - (.(a) - .(b)) * exp (.(c) * wl)),
-                                                         where = .SD[1, .(a, b, c)]))))),
+               .(mod = list(nlrob(esy_emp ~ a - (a - b) * exp (c * compensated_level_cm), 
+                                              data = .SD,
+                                              na.action = na.exclude,
+                                              start = list(a = 10, b = 2, c = 0.01)))),
                keyby = .(type)]
     
-    # curve(esy_functions["raw", pred_fun[[1]]](x, 1), from = -100, 20, lty = 2)
-    # curve(esy_functions["corrected", pred_fun[[1]]](x, 1), from = -100, 20, col = 'blue', add = TRUE)
+    esy_mods[, pred_fun := map(mod, 
+                               ~as.function(list(wl = NULL,
+                                                 bquote(pmax(1, .(a) - (.(a) - .(b)) * exp (.(c) * wl)), 
+                                                        where = as.list(coef(.x))))))]
     
-    esy_functions
+    # drawdown[, esy_hat := esy_mods[.BY[[1]], pred_fun[[1]]](compensated_level_cm),
+    #          by = .(type)]
+    # ggplot(drawdown) +
+    #   aes(x = compensated_level_cm,
+    #       y = esy_emp) +
+    #   geom_point() +
+    #   geom_line(aes(y = esy_hat),
+    #             color = 'red') +
+    #   geom_function(fun = ~pmax(1, 9.86792148868664 - (9.86792148868664 - 2.39189118793206) *
+    #                               exp(0.00983144846311064 * .x)),
+    #                 color = 'green') +
+    #   facet_wrap(~type)
+    
+    esy_mods
   }
 
 
