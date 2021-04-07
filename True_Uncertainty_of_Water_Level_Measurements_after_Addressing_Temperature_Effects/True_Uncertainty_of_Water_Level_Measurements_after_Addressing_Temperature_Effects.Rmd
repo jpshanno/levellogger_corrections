@@ -61,6 +61,7 @@ loadd(bootstrap_models)
 loadd(predicted)
 loadd(fitted)
 loadd(water_balance)
+loadd(daily_water_balance)
 ```
 
 ```{r keypoints_check, echo=FALSE, results='asis', eval = TRUE}
@@ -97,7 +98,7 @@ Rename experimental periods "GW-Best Practices" = "stat-dis"
 groundwater, best practices stable temperatures (such as groundwater)
 groundwater, unsound practices vs groundwater, temperature-biased practices
 surfacewater, best practices
-surfacewater, unsound practices
+surfacewater, unsound practices (temperature-biased)
 
 Introduction is very technical -> add more about monitoring scenarios or another
 way to tie it into people's experience
@@ -204,7 +205,7 @@ is also clear that temperature-induced errors will be most apparent in field
 data when examining diurnal signals. Many studies have relied on the diurnal
 signal in well water levels and streamflow to estimate evapotranspiration and
 groundwater flow [@carlsonmazur-2014;
-@kirchner-2009; @loheide-2005; @mclaughlin-2014; @watras-2017; @white-1932].
+@kirchner-2009; @loheideii-2005; @mclaughlin-2014; @watras-2017; @white-1932].
 Without accounting for total uncertainty, analysis of diurnal signals will lead
 to skewed results as the initial inaccuracies compound. Therefore, quantifying
 and correcting for temperature-induced errors is essential to ensure that the
@@ -469,9 +470,8 @@ to highlight propagation of uncorrected errors into subsequent analyses. The
 data for this case study comes from a headwater wetland (0.81 ha) in the western
 Upper Peninsula of Michigan, USA. The data were collected during the ice-free
 season of 2018. Levellogger 1066016 was deployed in a 5.08cm I.D. monitoring 
-well and levellogger 1065861 was deployed in a sheltered open air area. Both
-loggers recorded synchronous 15-minute data, further details are available in
-@vangrinsven-2017. In the described deployment scenarios from above this would
+well and levellogger 1065861 was deployed in a sheltered open air area with both
+loggers recorded synchronous 15-minute data [@vangrinsven-2017]. In the described deployment scenarios from above this would
 be unsound groundwater monitoring. We will illustrate the impact of temperature 
 bias on two common analyses: mean daily water level and evapotranspiration 
 derived from diurnal water level variation. For the former analysis we calculate
@@ -479,7 +479,7 @@ mean uncorrected and corrected water levels on a daily timestep and compare the
 difference between them.  
 
 An approach for decomposing daily groundwater level records into
-evapotranspiration and groundwater recharge was first proposed by @white-1932.
+evapotranspiration and groundwater recharge was first proposed by White [-@white-1932].
 The approach involves estimating net inflow rate during a recharge period
 typically the pre-dawn hours. This rate and the change in water level between
 recharge periods can be used to determine evapotranspiration. Converting water
@@ -490,22 +490,22 @@ account for variation in groundwater flow with water level change. The White and
 Loheide works focused on groundwater-phreatophyte interactions, but the method
 has been extended to use in wetland settings [@diamond-2018; @mclaughlin-2014;
 @telander-2015]. In these setting Loheide's readily available specific yield was
-expanded to ecosystem specific yield to acknowledge the influence of factors
-beyond the substrate surrounding the well [@mclaughlin-2014]. We applied the
-adjusted White methodology to the 15-minute wetland well data to calculate daily
-evapotranspiration for the corrected and uncorrected water level records. Our
-estimates of ecosystem specific yield were derived as the ratio between the
-change in water level and the change in water availability (precipitation plus
-snowmelt less potential evapotranspiration). This is the inverse analog of rain
-to rise ratio used in other studies [@mclaughlin-2014]. We used this analogous
-approach because our site is influenced by two factors known to obfuscate a
-clear ecosystem specific yield relationship: surface water exchange
-[@watras-2017] and additional hydrologic cycles at longer wavelengths (e.g.
-seasonal inundation patterns) [@zhu-2011]. For validation of the correction
-procedure We compared the corrected and uncorrected estimates to potential
-evapotranspiration (PET) calculated using the modified Hargreaves-Samani
-equation @hargreaves-2003 with data from nearby meteorological stations
-(Shannon, in preparation).
+expanded to ecosystem specific yield (E~Sy~) to acknowledge the influence of
+factors beyond the substrate surrounding the well [@mclaughlin-2014]. We applied
+the adjusted White methodology to the 15-minute wetland well data to calculate
+daily evapotranspiration for the corrected and uncorrected water level records.
+Our estimates of E~Sy~ were derived as the ratio between the change in water
+level and the change in water availability (precipitation plus snowmelt less
+potential evapotranspiration) for a previous year of data at the same location.
+This is an inverse analog of rain to rise ratio used in other studies
+[@mclaughlin-2014]. We used this analogous approach because our site is
+influenced by two factors known to obfuscate a clear E~Sy~ relationship: surface
+water exchange [@watras-2017] and additional hydrologic cycles at longer
+wavelengths (e.g. seasonal inundation patterns) [@zhu-2011]. For validation of
+the correction procedure We compared the corrected and uncorrected estimates to
+potential evapotranspiration (PET) calculated using the modified
+Hargreaves-Samani equation @hargreaves-2003 with data from nearby meteorological
+stations (Shannon, in preparation).
 
 
 ## Software
@@ -745,27 +745,68 @@ daily_wl_errors_n_days <-
   sum(daily_wl_comparisons$error_cm > daily_wl_comparisons$instrument_error_cm)
 
 daily_wl_errors_percent <- 
-  paste(round(daily_wl_errors_n_days / daily_wl_comparisons, 1), '%')
+  paste(round(daily_wl_errors_n_days / nrow(daily_wl_comparisons), 1), '%')
+
+max_daily_error <- 
+  round(abs(max(daily_wl_comparisons$error_cm, na.rm = TRUE)), 1)
+
+min_daily_error <- 
+  round(abs(min(daily_wl_comparisons$error_cm, na.rm = TRUE)), 1)
+
+white_cor <- 
+  abs(cor(daily_water_balance[(dry_day), .(pet_cm_d, raw_et_cm_d, corrected_et_cm_d)],
+      use = 'pairwise.complete'))
+
+pet_cor <- 
+  round(white_cor[-c(1), "pet_cm_d"], 3)
+
+et_cor <- 
+  round(white_cor["raw_et_cm_d", "corrected_et_cm_d"], 3)
 
 ```
 
 
-When mean raw and corrected water levels are compared `r daily_wl_errors_n_days`
-days (`r daily_wl_errors_percent`) were found to have temperature corrections
-that exceeded combined instrument error (Figure \@ref(fig:case-study-panel)).
-Daily mean errors were greatest in the fall, and smallest during the summer
-months, ranging up to a 4 cm overestimation of mean daily water level.
+For much of the study period the overall trend in water levels track well
+between the raw and corrected levels (Figure \@ref(fig:case-study-panel)A).
+Differences become noticeable when the common analyses are tested. When mean raw
+and corrected water levels are compared `r daily_wl_errors_n_days` days (
+`r daily_wl_errors_percent`) were found to have temperature corrections that
+exceeded combined instrument error (Figure \@ref(fig:case-study-panel)B). Daily
+mean errors were greatest in the fall, and smallest during the summer months,
+ranging from a `r min_daily_error` cm underestimate and `r max_daily_error` cm 
+overestimate of mean daily water level.  
 
-Need to evaluate Esy equation for corrected and uncorrected (visually they look
-about the same)
+*Align column edges and shaded vertical bar in panel B*
 
-The days highlighted in the panel (with likely flawed estimates
-of ET) show a mean difference less than instrument error
-
-```{r case-study-panel, fig.width=7.5, fig.cap='A comparison of corrected and uncorrected wetland water levels. Panel A shows the entire growing season at 15-minute interval. Panel B shows the error in daily mean water level. The vertical shaded bar in Panels A and B highlight the two days shown in Panel C. Panel C shows details of two diurnal water level cycles and the decomposed components of the @white-1932 method.'}
+```{r case-study-panel, fig.width=7.5, fig.cap='A comparison of corrected and uncorrected wetland water levels. Panel A shows the entire growing season at 15-minute interval. Panel B shows the error in daily mean water level. Panel B dashed lines represent manufacturer instrument error and darker columns indicate errors greater than combined instrument error. The vertical shaded bar in Panels A and B highlight the two days shown in Panel C. Panel C shows details of two diurnal water level cycles and the decomposed components of the @white-1932 method.'}
 knitr::include_graphics("../output/figures/case_study_panel.pdf")
 ```
 
+Errors at the sub-daily range were present between the raw and corrected. The
+two days shown in Figure \@ref(fig:case-study-panel)C have daily mean water
+level errors within the expected instrument error. The inflow rate and estimates
+of ET derived from these diurnal fluctuations are qualitatively different upon
+visual inspection. The uncorrected data shows higher inflow and corresponding
+higher ET for periods with similar raw and corrected water level change. To
+quantify the qualitative differences E~Sy~ was derived separately using the raw
+and corrected data. The respective E~Sy~ functions were then used to separate
+the raw and corrected diurnal fluctuations into inflow and ET. During the 
+drawdown period used to calculate E~Sy~ the temperature-induced error was generally
+small resulting in similar E~Sy~ functions. While there is no
+validation data to compare estimated inflow to actual inflow, we can compare
+estimated ET to PET. For the following results only dry days were used, where
+dry is defined as no daily rainfall or snowmelt greater than 1 mm in a two day
+period. ET~raw~ showed negligible correlation with PET (`r pet_cor["raw_et_cm"]`), 
+while ET~corr~ showed moderate correlation with PET (`r pet_cor["corrected_et_cm"]`).
+Fitting an OLS linear regression between estimated ET and PET showed no 
+significant slope between ET~raw~ and PET, but a significant slope, close to
+1 for ET~corr~ and PET (Figure \@ref(fig:et-to-pet-panel)). 
+
+```{r et-to-pet-panel, fig.cap = "Linear regession fit between potential evapotranpiration and White method estimates of evapotranspiration. The estimates from the raw data showed a significant intercept but not a significant slope. The estimates from the corrected data showed a significant intercept and slope. The dashed line shows a 1:1 relationship to represent perfect estimation of PET."}
+
+knitr::include_graphics("../output/figures/et_to_pet_panel.pdf")
+
+```
 
 
 # Discussion
@@ -1094,16 +1135,69 @@ various uncertainty intervals from this study added as thresholds for comparison
 
 ## Case Study
 
-Larger errors in the fall can be explained by seasonal temperature patterns. In
-spring air is cold and water is cold from snowmelt. In fall air is cold, but 
-water is warmer due to rain & groundwater as sources, rather than recent 
-snowmelt.
+For both analyses performed in the case study we found significant errors
+introduced due to temperature-induced errors in WL~biased~. The purpose of water
+level records in monitoring and research is enable a downstream analysis.
+Unaccounted for errors in the initial recording have measurable impacts, which
+could lead to erroneous conclusions and potentially real-world actions that are
+at best misguided and at worst harmful. The presence of detectable error is
+dependent on the scale of the analysis performed. In Figure
+\@ref(fig:case-study-panel), the two highlighted days in panel C show
+approximately a 1.7-fold difference in ET estimates, representing estimation 
+errors of 170% and 166% of ET~corr~. In Panel B we see that the
+daily mean error on these days show error within the range of expected
+instrument error. Quantifiable errors are more likely to be detected (**& to be
+of a larger percentage magnitude?**) at finer scales (sub-daily) than at coarser
+scales (daily). Figure \@ref(fig:error-scale) shows the result of increasing
+data smoothing to identify a scale where temperature errors are not detectable.
+It shows that a moving average with a window size of *ZZZ* days is necessary to
+completely mask the effects so that 95% of errors are within the range of
+instrument error.  
 
-There are not enough calibration measurements to truly analyze which daily mean
-is 'correct', but based on the experiment in this study we are working from the
-assumption that the temperature-corrected values are. The second analysis is
-easier to evaluate because we can compare the results to the relationship with 
-PET. 
+We observed the largest errors in the fall after wetland water levels had
+rebounded to the surface. This is due to a combination of seasonal air and water
+temperature trends. This period had the lowest air temperatures, and the highest
+water temperatures. Figure \@ref(fig:drivers-panel)A & C show that these
+conditions led to the largest errors in our observational experiment. As the air
+temperatures decline in the fall and wetland water temperatures increase due to
+groundwater inputs, the temperature bias increases. Errors in the spring would
+likely be large, but slightly smaller than fall errors with low air temperatures
+and low water temperatures.
+
+<!-- 
+Data doesn't support this straightforward an interpretation but it could be worth exploring this idea more:
+During the summer daily mean
+error appears to be correlated with response to precipitation events (coincident
+peaks in Figure \@ref(fig:case-study-panel) Panels A & B), while the
+precipitation response peak in mid-June does not show an increase in daily mean
+errors. We suggest that in mid-June the high water levels in the wetland masked
+a water level temperature response, while in the drier summer months, wetland
+water temperatures showed an increased response, resulting increased error.
+-->
+
+It is important to note that while ET~corr~ showed a moderate correlation with
+PET a significant slope near 1, the R^2^ of the OLS model was low. This is in
+line with other White-method separation studies where low R^2^ values are
+observed. @soylu-2012 found R^2^ values of less than 0.2 for the White method
+and 0.33--0.4 for their proposed sine-wave based method. @mclaughlin-2014 does
+not report R^2^, but their $ET/PET$ index shows high variability, suggesting low
+R^2^. Even with direct eddy flux measurement of ET, @lafleur-2005 found an R^2^
+as low as 0.56 between ET and PET for a single year of data. Additionally our
+wetland could be expected to have poor performance or even be unusable for this
+analysis. Nearby surface water dynamics and connectivity to other surface water
+sources has been shown to have high levels of interference with determining
+E~Sy~ or White-method ET [@watras-2017; @zhu-2011].
+
+<!--
+Low R-squared not suprising:
+@zhu-2011 showed seasonal oscillations masking daily patterns
+@watras-2017 couldn't fit ESy function to pond-adjacent wetlands
+@lafleur-2005 direct measurement of ET via eddy flux & r^2 as low as 0.56 for ET ~ PET
+@wang-2014 different method but r^2 ~ 0.25
+@mclaughlin-2014 doesn't report ET ~ PET r^2, but is a noise relationship in their
+ET/PET, suggesting low r^2
+@soylu-2012 shows White method with r^2 <= 0.2 & proposed method with 0.33 <= r^2 <= 0.4 
+-->
 
 # Conclusion and Recommendations
 
@@ -1124,6 +1218,10 @@ compare to local weather station(s) for validation of your observations.
 offsets are corrected through manual calibration measurements during deployment.
 If deployed conditions will not allow for manual calibration measurements, the
 above approaches are applicable, but offsets must be carefully calculated.
+
+- The temporal scale of analysis dictates the impact of temperature-induced 
+errors. Finer resolution analyses require more intense scrutiny of sources of
+error.
 
 \acknowledgments
 The acknowledgments must list:
