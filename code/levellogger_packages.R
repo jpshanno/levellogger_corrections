@@ -22,6 +22,7 @@ library(fst)
 # library(disk.frame)
 library(parallel)
 library(ggthemes)
+library(ggtext)
 library(robustbase)
 
 # setup_disk.frame(4)

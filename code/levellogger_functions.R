@@ -1027,6 +1027,100 @@ create_case_study_panel <-
            height = 9)
   }
 
+create_et_to_pet_panel <- 
+  function(data,
+           out.path){
+    
+    base_font <- 
+      14
+    
+    data <- 
+      copy(data)
+    
+    data[, pet_cm_d := -pet_cm_d]
+    
+    raw_mod <- 
+      lm(raw_et_cm_d ~ pet_cm_d, 
+         data = data[(dry_day)]) 
+    raw_summ <- 
+      summary(raw_mod)
+    
+    
+    corrected_mod <- 
+      lm(corrected_et_cm_d ~ pet_cm_d, 
+         data = data[(dry_day)]) 
+    corrected_summ <- 
+      summary(corrected_mod)
+    
+    labels <- 
+      data.frame(lab = c(glue("{`(Intercept)`} + {pet_cm_d}&times;PET<br>R<sup>2</sup> = {r2}", 
+                              .envir = c(as.list(round(coef(corrected_mod), 2)), 
+                                         list(r2 = round(corrected_summ$r.squared, 2)))),
+                         glue("{`(Intercept)`} + {pet_cm_d}&times;PET<br>R<sup>2</sup> = {r2}", 
+                              .envir = c(as.list(round(coef(raw_mod), 2)), 
+                                         list(r2 = round(raw_summ$r.squared, 2))))),
+                 type = factor(c("Corrected", "Raw"),
+                               levels = c("Raw", "Corrected"), 
+                               labels = c("Raw", "Corrected"),
+                               ordered = TRUE),
+                 x = c(0.21, 0.45),
+                 y = c(0.14, 0.28),
+                 angle = c(20, 7),
+                 lab11 = c("1:1", "1:1"))
+    
+    out <- 
+      melt(data[(dry_day)],
+           id.vars = c("sample_date", "pet_cm_d", "total_input_cm_d"), 
+           measure.vars = patterns("(_et_cm_d|compensated_level)"), 
+           variable.name = "type", 
+           value.name = "value") %>% 
+      transform(variable = str_remove(type, "^(external_)?(corrected|raw)_"), 
+                type = str_extract(type, "^(external_)?(corrected|raw)")) %>% 
+      dcast(... ~ variable, value.var = "value") %>% 
+      subset(et_cm_d > 0 & str_detect(type, "external", negate = TRUE)) %>% 
+      transform(type = factor(type, 
+                              levels = c("raw", "corrected"), 
+                              labels = c("Raw", "Corrected"),
+                              ordered = TRUE)) %>% 
+      ggplot() +
+      aes(x = pet_cm_d, 
+          y = et_cm_d) +
+      geom_point() + 
+      geom_abline(linetype = 'dashed') +
+      geom_richtext(data = labels,
+                    aes(x = -Inf, y = Inf, label = lab),
+                    hjust = 0,
+                    vjust = 1,
+                    fill = "#FFFFFF80",
+                    size = 0.9 * base_font * 5/14,
+                    label.margin = unit(c(1.5, 1), 'lines'),
+                    label.colour = NA) +
+      geom_text(data = labels,
+                aes(x = x,
+                    y = y, 
+                    label = lab11,
+                    angle = angle),
+                size = 0.9 * base_font * 5/14) +
+      geom_smooth(method = lm,
+                  formula = y ~ x,
+                  color = 'blue',
+                  se = FALSE) +
+      labs(x = "Potential Evapotranspiration (cm d<sup>-1</sup>)",
+           y = "Evapotranspiration (cm d<sup>-1</sup>)") +
+      facet_wrap(~type,
+                 scales = 'free') +
+      theme_minimal(base_size = base_font) +
+      theme(axis.title.x = element_markdown(),
+            axis.title.y = element_markdown(),
+            strip.text = element_text(size = 0.9*base_font,
+                                      face = 'bold'))
+    
+    ggsave(plot = out,
+           filename = out.path,
+           width = 7.5,
+           height = 3.75)
+  }
+
 # Case Study Functions ----------------------------------------------------
 
 load_case_study <- 

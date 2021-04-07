@@ -111,8 +111,11 @@ plan <-
 
     case_study_panel = 
       create_case_study_panel(case_study, 
-                              file_out("output/figures/case_study_panel.pdf"))
+                              file_out("output/figures/case_study_panel.pdf")),
 
+    et_to_pet_panel =
+      create_et_to_pet_panel(daily_water_balance,
+                             file_out("output/figures/et_to_pet_panel.pdf"))
 
 # Tables ------------------------------------------------------------------
 
