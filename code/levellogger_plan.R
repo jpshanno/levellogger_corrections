@@ -59,7 +59,7 @@ plan <-
       compensate_data(calibration.data = file_in("data/case_study/calibration_data.csv")) %>%
       smooth_data(n = 13, "raw_compensated_level_cm", "corrected_compensated_level_cm") %>%
       subset_year(year = 2018) %>%
-      add_met_data(file_in("../Climate_Change_Impacts/_targets/objects/water_budget")) %>% 
+      add_met_data(file_in("data/case_study/water_budget.fst")) %>% 
       calculate_sy(),
 
     # Calculate water balance components
@@ -68,20 +68,28 @@ plan <-
       calculate_detrended_g() %>%
       calculate_delta_s() %>%
       calculate_et() %>% 
-      adjust_water_balance() %>% 
-      drop_trailing_data("2018-08-23"),
+      adjust_water_balance(),
 
     daily_water_balance =
       water_balance %>% 
       expand_instantaneous_rates(reg.exp = "(in|dwt|et)_cm_s") %>% 
       summarize_by_day(mean = c("corrected_compensated_level_cm",
-                                "raw_compensated_level_cm"),
+                                "raw_compensated_level_cm",
+                                "air_temperature_c",
+                                "water_temperature_c"),
                        sum = c("raw_et_cm_15m",
-                               "corrected_et_cm_15m"),
+                               "corrected_et_cm_15m",
+                               "external_raw_et_cm_15m",
+                               "external_corrected_et_cm_15m"),
                        first = c("total_input_cm_d",
-                                 "pet_cm_d")) %>% 
+                                 "pet_cm_d", 
+                                 "tmin_c",
+                                 "tmax_c",
+                                 "melt_cm",
+                                 "rain_cm",
+                                 "ytd_water_balance")) %>% 
       transform(dry_day = frollapply(total_input_cm_d, 
-                                     n = 3, 
+                                     n = 2, 
                                      FUN = max,
                                      align = 'right', 
                                      na.rm = TRUE) < 0.1),
