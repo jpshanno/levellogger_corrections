@@ -941,6 +941,7 @@ create_case_study_panel <-
           geom_col(aes(fill = ifelse(abs(error_cm) <= instrument_error_cm, "insig", "sig"),
                        color = ifelse(abs(error_cm) <= instrument_error_cm, "insig", "sig")), 
                    width = 0.4,
+                   position = position_nudge(x = 0.5),
                    show.legend = FALSE) +
           geom_ribbon(aes(ymin = -instrument_error_cm,
                           ymax = instrument_error_cm),
@@ -951,11 +952,11 @@ create_case_study_panel <-
                                        insig = 'gray70')) +
           scale_color_manual(values = c(sig = 'gray50',
                                        insig = 'gray70')) +
-          labs(y = "Error in Daily\nMeans (cm)") +
+          labs(y = "Error in Daily\nMean WL (cm)") +
           scale_x_date(labels = NULL,
                        date_breaks = "1 month",
                        expand = expansion(mult = c(0, 0),
-                                          add = c(0, 0))) +
+                                          add = c(0, 0.5))) +
           theme_minimal(base_size = base_font) +
           theme(plot.margin = margin(0, 0, b = 0, 0, unit = 'points'))} / 
       {ggplot(panel_data) +
@@ -999,6 +1000,7 @@ create_case_study_panel <-
                         label = label),
                     angle = 90,
                     vjust = -0.15,
+                    color = c('blue', 'black'),
                     size = 0.8*base_font*5/14,
                     parse = TRUE) +
           facet_wrap(~sample_date,
@@ -2337,4 +2339,3 @@ fit_matrix_files <-
     files <- paste0("output/tabular/bootstrap_prediction_matrices_", x, ".rds")
     setNames(files, x)
   }
-
