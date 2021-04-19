@@ -580,10 +580,11 @@ reproducible project and publication.
 
 ```{r prediction-rmse}
 rmse_values <- 
-  melt(predicted[, lapply(.SD, function(x) sqrt(mean((x - water_depth_cm)^2))), 
+  melt(predicted[, c(instrument_error_cm = qnorm(0.975) * instrument_error_cm[1], 
+                         lapply(.SD, function(x) sqrt(mean((x - water_depth_cm)^2, na.rm = TRUE)))), 
                    by = .(water_sn, baro_sn, experiment),
                    .SDcols = c("centered_water_level_cm", "rect_water_level_cm")], 
-       id.vars = c("water_sn", "baro_sn", "experiment"),
+       id.vars = c("water_sn", "baro_sn", "experiment", "instrument_error_cm"),
        measure.vars = c("centered_water_level_cm", "rect_water_level_cm"),
        variable.name = "type", 
        value.name = "rmse_cm")
@@ -597,23 +598,33 @@ rmse_mod_reduced <-
 # emmeans(rmse_mod, pairwise ~ type | experiment, adjust = "bonferroni")$contrasts
 # emmeans(rmse_mod_reduced, pairwise ~ type | experiment, adjust = "bonferroni")$contrasts
 
+# # Is RMSE less than instrument error?
+# rmse_values[type == "rect_water_level_cm",
+#             t.test(rmse_cm, instrument_error_cm, data = .SD,
+#                    alternative = "less")[c("statistic", "p.value")],
+#             by = .(baro_sn, experiment)]
+
 ```
 
 The model form described in Equation \@ref(eq:comp-base) showed a good fit to
 the SW~bias-2~ data with bootstrapped estimates of adjusted $R^2$ ranging from
-0.89 to 0.98. The bootstrap predictions had RMSE values that ranged from 0.3208
-to 0.5092 cm, which includes the uncertainty inherent in the instrument
-measurements. For reference observed error for that period ranged from -15.98 to
-10.80 cm. When the SW~bias-2~ model was used to predict other experimental
-periods, the RMSE of raw and corrected water level errors relative to true water
-level showed a mean change of -0.001, -0.058, 0.042, and -0.614 cm within the
-GW~best~, GW~bias~, SW~best~, and SW~bias-1~ experimental periods respectively,
-where a negative value indicates a smaller RMSE following correction. The
-reduction in RMSE for the GW~bias~ and SW~bias-1~ period were significant at the
-$\alpha=0.05$ level, as was the increase in RMSE in the SW~best~ period. When
-the two models that that showed outlier model performance (water transducer
-2025928, Figure \@ref(fig:coefficients)) were removed, the increase in RMSE in
-the SW~best~ period was reduced to -0.018 and was no longer significant. 
+0.89 to 0.98. The bootstrap predictions of final WL~corr~ had RMSE values that
+ranged from 0.3208 to 0.5092 cm, which includes the uncertainty inherent in the
+instrument measurements. For reference observed error for that period ranged
+from -15.98 to 10.80 cm. When the SW~bias-2~ model was used to predict other
+experimental periods, the RMSE of raw and corrected water level errors relative
+to true water level showed a mean change of -0.001, -0.058, 0.042, and -0.614 cm
+within the GW~best~, GW~bias~, SW~best~, and SW~bias-1~ experimental periods
+respectively, where a negative value indicates a smaller RMSE following
+correction. The reduction in RMSE for the GW~bias~ and SW~bias-1~ period were
+significant at the $\alpha=0.05$ level, as was the increase in RMSE in the
+SW~best~ period. When the two models that that showed outlier model performance
+(water transducers 2025928 and 2030899, Figure \@ref(fig:coefficients)) were
+removed, the increase in RMSE in the SW~best~ period was reduced to -0.018 and
+was no longer significant. When the RMSE of WL~corr~ was compared to instrument
+error bounds using a t-test with the $\alpha=0.05$ and $H_A=\hat{\epsilon}_{L} -
+\epsilon_{instrument} < 0$, we found RMSE of WL~corr~ was significanlty less
+than instrument error for all experimental periods.
 
 **MAKE SURE YOU DISCUSS WHY THESE LOGGERS WERE REMOVED**
 
@@ -621,40 +632,6 @@ the SW~best~ period was reduced to -0.018 and was no longer significant.
 loadd(fig_coefficients_panel)
 fig_coefficients_panel
 ```
-
-```{r testing-vs-training}
-
-testing_rmse <- 
-  rmse_values[experiment == "var-dis" & type == "rect_water_level_cm",
-              .(water_sn, baro_sn, testing_rmse_cm = rmse_cm)]
-
-training_rmse <- 
-  fitted[experiment == "var-dis",  .(training_rmse_cm = sqrt(mean(((raw_water_level_cm - predicted_error_cm) - water_depth_cm)^2))), by = .(water_sn, baro_sn)]
-
-rmse_compare <- 
-  melt(testing_rmse[training_rmse, on = c("water_sn", "baro_sn")],
-       measure.vars = c("training_rmse_cm", "testing_rmse_cm"),
-       variable.name = "type",
-       variable.factor = TRUE,
-       value.name = "rmse_cm")
-
-# ggplot(rmse_compare) + geom_histogram(aes(x = rmse_cm, fill = type), bins = 36)
-
-rmse_test <- 
-  rmse_compare[, t.test(rmse_cm ~ type, data = .SD, pair = TRUE)[c("estimate", "stderr", "p.value")],
-               by = .(baro_sn)]
-
-rmsetest <- 
-  setNames(as.list(set_errors(rmse_test$estimate, rmse_test$stderr)),
-           rmse_test$baro_sn)
-```
-
-Models developed under SW~bias-2~ conditions and applied to SW~bias-1~ data
-showed good performance relative to the models derived under SW~bias-1~
-conditions. For barometric transducer 1066019 there was not a significant
-difference in RMSE between the two sets of predictions (`r rmsetest[["1066019"]]`). 
-Models developed under SW~bias-2~ showed a decline in performance relative to 
-SW~bias-1~ models with a significant decrease in RMSE (`r rmsetest[["1065861"]]`).
 
 Prior to compensation 0 to 57% of measured points fell outside of the 95%
 confidence band defined by the combined stated instrument errors of the
