@@ -672,9 +672,9 @@ transducers mentioned above.
 
 ```{r oor}
 
-predicted[, `:=`(raw_ooir = raw_water_level_cm < instrument_lower | raw_water_level_cm > instrument_upper, 
+predicted[, `:=`(raw_ooir = centered_water_level_cm < instrument_lower | centered_water_level_cm > instrument_upper, 
                  rect_ooir = rect_water_level_cm < instrument_lower | rect_water_level_cm > instrument_upper,
-                 raw_oopr = raw_water_level_cm < propagated_lower | raw_water_level_cm > propagated_upper, 
+                 raw_oopr = centered_water_level_cm < propagated_lower | centered_water_level_cm > propagated_upper, 
                  rect_oopr = rect_water_level_cm < propagated_lower | rect_water_level_cm > propagated_upper)]
 
 oor_summary <- 
@@ -693,12 +693,14 @@ oor_percent_all_points <-
                                by = .(experiment),
                                .SDcols = patterns("(w|t)_oo")]
 
-knitr::kable(setNames(oor_percent_all_points, c(" ", "Raw", "Rectified", "Raw", "Rectified")) ,
-             align = "c",
-             # format = "latex",
-             caption = "Percentage of observations of raw and corrected water levels falling outside of instrument accuracy range and propoaged error range.") #%>% 
-  # kableExtra::add_header_above(header = c("Experimental Period" = 1, "Instrument Error" = 2, "Propogated Error" = 2))
-
+flextable(oor_percent_all_points) %>% 
+    delete_part('header') %>% 
+    add_header_row(values = c("", "WL~raw~", "WL~corr~", "WL~raw~", "WL~corr~")) %>% 
+    add_header_row(values = c("Experiment", "Instrument Error", "Propagated Error"),
+                   colwidths = c(1, 2, 2)) %>% 
+    hline_top(border = fp_border(width = 1.5)) %>% 
+    fit_to_width(max_width = 8) %>% 
+    align(align = "center", part = 'all')
 ```
 
 ## Uncertainty Analysis
