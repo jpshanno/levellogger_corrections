@@ -3,7 +3,7 @@
 journal: "Water Resources Research"
 # Use draft to submit a paper
 classoption: "draft,linenumbers"
-title: "Pressure Transducer Compensation and its Impacts on Water Level Uncertainty and Diurnal Signals"
+title: "Comparison of Pressure Transducer Errors and Compensation under Varied Monitoring Scenarios"
 # First name or initial followed by last name
 authors:
   - name: Joseph P. Shannon
