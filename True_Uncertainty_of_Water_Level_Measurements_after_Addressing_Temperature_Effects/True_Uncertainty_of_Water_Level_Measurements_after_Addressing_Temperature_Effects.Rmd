@@ -43,7 +43,9 @@ header-includes:
 ---
 
 ```{r setup, echo=FALSE, message = FALSE, warning = FALSE}
-
+library(flextable)
+library(ftExtra)
+library(officer)
 source("/home/jpshanno/Documents/Levellogger_Correction/code/levellogger_packages.R")
 source("/home/jpshanno/Documents/Levellogger_Correction/code/levellogger_functions.R")
 # Some recommended settings. 
@@ -125,73 +127,76 @@ to measure water levels. These instruments are easy to deploy, require minimum
 access to the instrument, and provide long-term continuous records in an easily
 analyzed format via on-board datalogging. They have been developed in two major
 configurations: absolute (unvented), and gauge (vented). Absolute transducers
-measure pressure relative to some fixed pressure contained on one side of a
+measure pressure relative to a fixed pressure contained on one side of a
 flexible membrane. Gauge transducers measure pressure across a similar membrane
-relative to a chamber connected to the atmosphere via a vent tube. Speaking
-generally of pressure transducers in hydrologic monitoring, it has been pointed
-out that "these systems commonly are not adequately supported by
-quality-assurance procedures." [@freeman-2004, p. 1]. And upon studying the
-impacts of temperature and temperature gradients on water level measurement
-errors @liu-2015 (p. 72) concluded that "measurement of the water level...is not
-simple". Even the relatively simple task of measuring water level in a tank may
-be confounded by propagating instrument uncertainty through to final water
-levels [@tamari-2010].
+with one chamber connected to the atmosphere via a vent tube. Speaking generally
+of pressure transducers in hydrologic monitoring, it has been pointed out that
+"these systems commonly are not adequately supported by quality-assurance
+procedures." [@freeman-2004, p. 1]. And upon studying the impacts of temperature
+and temperature gradients on water level measurement errors @liu-2015 (p. 72)
+concluded that "measurement of the water level...is not simple". Even the
+relatively simple task of measuring water level in a closed tank may be
+confounded by propagating instrument uncertainty through to final water levels
+[@tamari-2010].
 
 In the above quote @liu-2015 were commenting on additional uncertainty that
 absolute temperature and temperature gradients introduce into water level
-measurements. @freeman-2004 highlighted water temperature gradients as a
-potential source of error, and in the same year @cain-2004 examined
-temperature-derived artifacts within gauge transducers. Within absolute
-transducers artifacts were shown to arise from the temperature of instrument
-[@moore-2016], as well as from differing thermal regimes between barometric and
-water pressure instruments [@cuevas-2010; @mclaughlin-2011]. @liu-2015 and
-@moore-2016 go on to suggest that all transducers be tested for inaccuracies
-over the range of temperature measurements and individual compensation equations
-be developed to apply to collected data.
+measurements. @freeman-2004 highlighted water temperature gradients and rapid
+temperature fluctuations as potential sources of error, and in the same year
+@cain-2004 examined temperature-derived artifacts within gauge transducers.
+Within absolute transducers, artifacts were shown to arise from the temperature
+of the instrument [@moore-2016], as well as from differing thermal regimes
+between barometric and water pressure instruments [@cuevas-2010;
+@mclaughlin-2011]. @liu-2015 and @moore-2016 go on to suggest that all
+transducers be tested for inaccuracies over the range of temperature
+measurements and individual compensation equations be developed to apply to
+collected data. That conclusion is supported by other work has found that
+temperature-induced errors can be as high as 19% in streamflow monitoring
+[@cuevas-2010] or 1.5 cm day<sup>-1</sup> in groundwater monitoring
+[@mclaughlin-2011]. 
 
-@mclaughlin-2011 concluded that temperature differentials between water and
-barometric pressure measurements introduced detectable artifacts with a 1.5 cm
-increase in the diurnal variation. This result is similar to @cuevas-2010, who
-found a 19% increase in streamflow diurnal fluctuation when barometric and water
-transducers were deployed in different thermal settings. Both
-@mclaughlin-2011 and @cuevas-2010 focused on absolute transducers, but similar
-work has also been performed using vented gauge transducers. @cain-2004 found
-that temperature changes within the vent-tube of gauge pressure transducers
-introduce water level artifacts, which was explored further by
-@liu-2015 in multi-day laboratory and long-term field experiments. Their
-findings show that errors can be introduced due to water temperature or rapid
-fluctuations in air temperature. Their laboratory experiment found 1.4
-$mm^oC^{-1}$ error as water temperature changed (with constant air temperature).
-These corrections corresponded to errors of up to 7mm in their field
-experiments, with at least some of that error due to the rate of temperature
-change affecting the connection to the atmosphere via the vent tube.
-They also highlight the impact of rate of temperature change, with more rapid
-gradients inducing larger water level errors. Errors due to rapid temperature
-fluctuations can be expected to affect both absolute and gauge transducers as
-internal electronics and membranes must equilibrate to the new temperatures
-[@freeman-2004].
+To preempt these errors it is recommended that barometric and water level
+pressure transducers be deployed in similar thermal regimes (i.e. within a dry
+well at the same depth) (**CITATION**). However, this type of deployment is not
+always possible due to cost or setting. In other cases previous deployments may
+not have recognized the potential magnitude of error, but still represent
+critically necessary data sources. Because errors are temperature dependent we
+would expect that each different monitoring objectives may be differentially
+impacted. Additionally there the magnitude of error in will be controlled by the
+thermal gradient of the water and air pressure monitoring. To date studies on
+these types of errors have been focused on individual deployment scenarios
+without an attempt to compare the magnitude of errors under various common
+monitoring scenarios. For this study we defined four such scenarios which are a
+cross of two factors: thermal setting and deployment practice. Thermal setting
+can be broadly grouped into stable (groundwater) and variable (surface water).
+Deployment practice can be considered as 'best practice' (as described above) or
+'temperature-difference-biased' (loggers deployed without regard to similar
+thermal settings). The four scenarios are then best-practice groundwater
+(GW~best~), temperature-biased groundwater (GW~bias~), best-practice surface
+water (SW~best~), and temperature-biased surface water (SW~bias~). Without a
+systematic comparison between these scenarios it is difficult to determine
+primary source of error, the potential magnitude of error, and the appropriate
+mitigation or correction. A systematic evaluation can also show if 'best
+practice' is enough to eliminate temperature-indcued errors.
 
-Based on those studies the potential sources of error for absolute transducers
-are the water temperature, the air temperature, the difference between water and
-air temperature, and the rate of change for both water and air temperature.
-Previous studies have examined absolute transducer error due to individual
-transducer error [@moore-2016] and due to temperature differences between
-transducers [@mclaughlin-2011; @cuevas-2010]. @liu-2015 lays out the underlying
-physics that could lead to gauge transducer errors when a temperature difference
-exists along the vent tube. There is no analogous physical process for absolute
-transducers, which suggests that errors in absolute transducers are unlikely to 
-arise directly as a result of temperature difference. We present the alternative
-hypothesis that that perceived temperature difference error is the combination
-of individual transducer responses to water and air temperatures (Figure
-\@ref(fig:drivers-panel)). The out of phase variation in air temperature and water
-temperature result in the stronger gradient masking the effect of the weaker
-gradient. The sequential correction shown in Figure \@ref(fig:drivers-panel)
-illustrates how both errors must be addressed. There are two possible approaches
-to the correction. Develop univariate corrections to some reference pressure
-measurement for each transducer, or develop a single multi-variate correction to
-a known water depth for each pair of air and water transducers. By developing a 
-single multi-variate correction we can avoid the need to determine a suitable 
-reference pressure measurement or utilize a pressure chamber.
+Based on available theoretical and experimental results the potential sources of
+error for absolute transducers are water temperature, air temperature, and the
+rate of change for both water and air temperature. Apparent error introduced by
+temperature differential is likely the response of individual loggers to of
+out-of-phase variation in air and water temperatures. While a vent tube directly
+links air and water temperature impacts in gauge transducers [@liu-2015], there
+is no analogous physical process for absolute transducers. Out-of-phase
+variation in air temperature and water temperature can result in the stronger
+gradient masking the effect of the weaker gradient or aligned gradients
+amplifying errors. The sequential correction shown in Figure
+\@ref(fig:drivers-panel) shows water level measurement error based on air
+temperature, water temperature, and water temperature after removing the air
+temperature error. There are two possible approaches to the final correction.
+Develop univariate corrections to some reference pressure measurement for each
+transducer and applying them individually, or develop a single multi-variate
+correction to a known water depth for each pair of air and water transducers. By
+developing a single multi-variate correction we can avoid the need to determine
+a suitable reference pressure measurement or to utilize a pressure chamber.
 
 ```{r drivers-panel, fig.cap="Error is driven by a combination of individual transducer errors, which can result in masking by the stronger trend. Panel A shows water level error as a function of air temperature, illustrating a strong linear trend. Panel B shows very little relationship between raw water level error and water temperature. Panel C is the relationship between error and water temperature after the influence of air temperature has been removed via OLS linear regression. Data taken from a single pair of pressure transducers in this study.", fig.asp=0.33, fig.height = 3}
 loadd(fig_drivers_panel)
@@ -199,26 +204,27 @@ fig_drivers_panel
 
 ```
 
-Implied in the above studies is additional error, beyond instrument accuracy,
-that should be considered in the estimate of total measurement uncertainty. It
-is also clear that temperature-induced errors will be most apparent in field
-data when examining diurnal signals. Many studies have relied on the diurnal
-signal in well water levels and streamflow to estimate evapotranspiration and
-groundwater flow [@carlsonmazur-2014;
-@kirchner-2009; @loheideii-2005; @mclaughlin-2014; @watras-2017; @white-1932].
-Without accounting for total uncertainty, analysis of diurnal signals will lead
-to skewed results as the initial inaccuracies compound. Therefore, quantifying
-and correcting for temperature-induced errors is essential to ensure that the
-observed fluctuations are real and not an artifact. Cuevas [-@cuevas-2010] and
-Gribovszki [-@gribovszki-2013] validate their measurements with manual
-readings over the course of at least one 24-hour period. To be fully effective
-in field studies, these types of diurnal fluctuation validations would have to
-happen across the range of temperature and evapotranspiration/groundwater
-measurements throughout the monitoring period. This is often unfeasible for
-reasons related, but not limited, to budget, logistics, and safety. This leaves
-laboratory-derived compensation equations as the best alternative option, as
-recommended by Moore [-@moore-2016] and Liu [-@liu-2015].
+Implied in the consideration of temperature bias above is that there is
+additional, quantifiable error, that should be considered in the estimate of
+total measurement uncertainty. Many studies have relied on the diurnal signal in
+well water levels and streamflow to estimate evapotranspiration and groundwater
+flow [@carlsonmazur-2014; @kirchner-2009; @loheideii-2005;
+@mclaughlin-2014; @watras-2017; @white-1932]. Without accounting for total
+uncertainty, analysis of diurnal signals may lead to skewed results as the
+initial inaccuracies compound. Others may recognize potential errors and propose
+using a rolling average or a daily mean to smooth out and cancel the errors.
+However, if there is a strong gradient in any source of error (e.g. Fig.
+@\ref(fig:drivers-panel)A), the result will be a systematic error that cannot be
+smoothed away. Therefore, quantifying and correcting for temperature-induced
+errors is essential to ensure that the observed data are real and not entirely
+or partially artifacts. While there are some attempts to provide that validation
+through high-frequency manual readings [@cuevas-2010; @gribovszki-2013], it is
+often impractical or impossible to capture the range of potential temperature
+and water level values. This leaves laboratory-derived compensation equations as
+the best alternative option, as recommended by Moore [-@moore-2016] and Liu
+[-@liu-2015].
 
+<!--
 Previous work has focused on the role of laboratory-derived compensation 
 equations in correcting for temperature-derived errors in water level measurements.
 These equations also provide two other opportunities. They can be used to 
@@ -236,16 +242,22 @@ estimates of uncertainty. By validating the compensation equation on an
 independent dataset a new accuracy range can be determined and used for future
 corrected datasets. With a well constructed compensation equation these will 
 shrink the uncertainty bounds and allow for analysis of more precise signals.
+-->
 
 In this study we present a lab experiment to isolate and correct the separate
-impacts of transducer response to water and air temperatures. We demonstrate how
-these effects may mask one another resulting in water level errors within the
-range of instrument error (_need to explicitly add this to the discussion_). We
+impacts of transducer response to water and air temperatures. Our experiment is
+designed as a systematic comparison of errors under the four scenarios described
+above (GW~best~, GW~bias~, SW~best~, SW~bias~). We demonstrate how these effects
+may mask one another resulting in water level errors within the range of
+instrument error (_need to explicitly add this to the discussion_). We also
 present the corrected and uncorrected water levels on a test set of laboratory
-data at as well representative data from an ongoing hydrologic field study.
-Finally we calculate the propagated uncertainty for common transducer deployment
-conditions, compare this to instrument error, and evaluate both against
-published diurnal water level fluctuations.
+data as well representative data from an ongoing hydrologic field study. The
+comparison between corrected and uncorrected laboratory and field data
+highlights the impacts on derived analyses and future conclusions. Finally we 
+calculate the propagated uncertainty for common transducer deployment conditions 
+and demonstrate that temperature compensation can be used to increase 
+measurement precision (decrease uncertainty) beyond the stated manufacturer 
+error.
 
 # Materials and Methods
 
@@ -253,12 +265,16 @@ published diurnal water level fluctuations.
 
 ### Laboratory Data
 
-We have conducted a five day experiment recording constant water levels
-using absolute pressure transducers in four thermal settings to determine the
-impact of varying water and air temperatures, and temperature difference. The
-thermal settings represent a fully crossed design with stable and variable
-temperatures and similar and dissimilar air and water thermal regimes, with two
-periods of variable, dissimilar conditions (Table
+**Describe basement vs inside in terms of degrees C/day of variation (and then
+be sure to mention in the discussion that the basement is still more variable 
+than groundwater**
+
+We have conducted a five day experiment recording constant water levels using
+absolute pressure transducers in four deployment scenarios to determine the
+impact of varying water and air temperatures. The thermal scenarios represent a
+fully crossed design with stable and variable temperatures and similar and
+dissimilar air and water thermal regimes, with one experiment repeated to be
+used as a training set for developing correction equations (Table
 \@ref(tab:experiments)). Eighteen pressure transducers of varying age and model,
 all manufactured by Solinst, Ltd. (Georgetown, ON, Canada), were used to record
 water levels (Table \@ref(tab:loggers)). Two of these transducers, both Solinst
@@ -267,16 +283,27 @@ contained an absolute pressure transducer, temperature sensor, and on-board data
 logging. These loggers also provide internal temperature compensation of
 pressure measurements.
 
+<!--
+stat-sim GW~best~
+stat-dis GW~bias~
+var-sim SW~best~
+var-dis SW~bias~
+test-data
+-->
+
 ```{r experiments}
 experiments <- 
-  data.table(Experiment = c("stat-sim", "stat-dis", "var-sim", "var-dis", "test-data"),
+  data.table(Scenario = c("GW~best~", "GW~bias~", "SW~best~", "SW~bias-1~", "SW~bias-2~"),
+             `Monitoring Analog` = c("Groundwater", "Groundwater", "Surfacewater", "Surfacewater", "Surfacewater"),
+             `Deployment Description` = c("Best Practice", "Temperature-differential Biased", "Best Practice", "Temperature-differential Biased", "Temperature-differential Biased"),
              Temperature = c("Stable", "Stable", "Variable", "Variable", "Variable"),
              `Air/Water Temperature Differential` = c("Similar", "Dissimilar", "Similar", "Dissimilar", "Dissimilar"))
 
-knitr::kable(experiments,
-             # format = "latex",
-             align = "c",
-             caption = "Description of experimental conditions.")
+qflextable(experiments) %>% 
+  # colformat_md() %>% 
+  set_caption("Description of experimental conditions. Best practice describes air and water pressure loggers deployed under similar thermal regimes.",
+              autonum = run_autonum(seq_id = "tab", bkm = "experiments"))
+
 ```
 
 ```{r loggers}
@@ -291,63 +318,56 @@ Water level transducers were suspended from a brace across a large container
 with the transducers zero points aligned. The transducers were covered with a
 fixed depth of water and a layer of canola oil was added to prevent evaporation
 over the length of the experiment. Water level was measured at the start and end
-of the experimental period to confirm no evaporation. To provide thermally
-similar air and water environments we placed a graduated cylinder in the center
-of the water. The cylinder was partially filled with gravel and water to
-counteract the buoyancy of the cylinder. During the two periods with synchronous
-thermal regimes the two barometric transducers were suspended directly above the
-gravel surface. The entire apparatus was covered loosely with aluminum foil to
-prevent direct wind effects. For stable thermal regimes the experiment was
-conducted in a non-climate controlled basement to minimize diurnal temperature
-fluctuations. Varying thermal regime periods were conducted outdoors, out of
-direct solar radiation. For varying, dissimilar thermal regimes, the barometric
-transducers were placed under a black radiation shield to magnify temperature
-differentials and purposely induce errors from rapid temperature fluctuations
-[@liu-2015]. Compensation models (below) were developed using one day of
-recorded data in the variable, dissimilar conditions. Compensation model
-performance was than evaluated against the remaining data to evaluate the impact
-of compensation under various transducer deployment scenarios.
+of the experimental period to confirm no evaporation. To create the best-
+practice condition of thermally similar air and water environments we placed a
+weighted graduated cylinder in the center of the container. During the two
+periods with synchronous thermal regimes the two barometric transducers were
+suspended in the cylinder below the water surface. The entire apparatus was
+covered loosely with aluminum foil to prevent direct wind effects.  
+
+Best-practices and temperature-differential bias experiments were each performed
+twice under conditions designed to mimic common measurement targets. For stable
+thermal regimes the experimental apparatus was placed in a non-climate
+controlled basement to minimize temperature variations. Varying thermal regime
+periods were conducted outdoors, out of direct solar radiation. For both 
+SW~bias~ periods the
+barometric transducers were placed under a black radiation shield to magnify
+temperature differentials and purposely induce errors from rapid temperature
+fluctuations [@liu-2015]. Compensation models (below) were developed
+individually for each period. To test compensation model performance against
+novel data collected under different conditions, the SW~bias-2~ experimental
+period models were used to corrected all other periods.
 
 Transducers were deployed and data retrieved using using Solinst Levellogger v.
 4.4.0 software. Transducers were set to record at 1-minute intervals with time
-synchronized to computer time at launch. The four experiments were run serially
-without retrieving data from the Transducers A settling time of at least 30
-minutes was observed after barometric transducers or entire experimental
-apparatus were relocated, and exact experiment start and end times were
-determined in a post-hoc manner to ensure a suitable setting period.
-
-### Field Data
-
-A sample of representative data were taken from ongoing hydrologic field
-research. These data are from a study in the western Upper Peninsula of Michigan
-in sites located in black ash wetlands. Details on the hydrology of these sites
-can be found in Van Grinsven _et al_ [-@vangrinsven-2017]. The data used in this
-analysis are from well water levels collected from a 1.25" driven monitoring
-well in a wetland and a 6" parshall flume on an intermittent stream which serves 
-as the outflow of this headwater wetland. Well level, flume level, and barometric
-data were collected with instruments ######, ######, and ###### respectively. 
-Data were collected between ########## and ######## and recorded at 15-minute 
-intervals.
+synchronized to computer time at launch. To avoid disrupting the experimental
+apparatus, the four experiments were run serially without retrieving data from
+the transducers. A settling time of at least 30 minutes was observed after
+barometric transducers or the entire experimental apparatus were relocated, and
+exact experiment start and end times were determined in a post-hoc manner to
+ensure a suitable setting period between scenarios.
 
 ## Water Level Compensation
 
 All of the sensors used in this study are designed to measure pressure at a
-relatively constant temperature and utilize a fixed water density of 1000 $kg m^{-3}$ to convert pressure to depth (Personal Communication, Solinst). To
+relatively constant temperature and utilize a fixed water density of 1000 
+$kg m^{-3}$ to convert pressure to depth (Personal Communication, Solinst). To
 account for the larger range of temperatures observed in this study the recorded
-pressure was adjusted to account for the variable density of water. 
-$$P_{c} = P\;*\;\frac{\rho_o}{\rho_T}$$ 
-where $\rho_T$ is the density of water ($kg m^) as a
-function of temperature taken from [@tanaka-2001, Eq. 1], $\rho_o$ is the assumed
-density of water (1000 $kgm^{-3}$, and _P_ and $P_c$ are the observed and 
-density-corrected pressure readings in units of depth (cm for this study). Here 
-after all references to transducer pressure will refer to the density-compensated
-pressure. 
+pressure was adjusted to account for the variable density of water.
 
-Depth of water ($W_d$) was measured separately for each transducer from the water 
-surface to the transducer zero point. Raw water level was calculate for each
-water and air transducer pair (n = 36) as the absolute measured water pressure 
-minus the absolute air pressure ($L = P_w - P_a$). Water level error 
-($\epsilon_L$) was calculated as $L$ minus measured water depth.
+$$P_{c} = P\;*\;\frac{\rho_o}{\rho_T}$$ 
+where $\rho_T$ is the density of water ($kg m^) as a function of temperature
+taken from [@tanaka-2001, Eq. 1], $\rho_o$ is the assumed density of water (1000
+$kgm^{-3}$, and _P_ and $P_c$ are the observed and density-corrected pressure
+readings in units of depth (cm for this study). Here after all references to
+transducer pressure will refer to the density-compensated pressure.
+
+Depth of water ($W_d$) was measured separately for each transducer from the
+water surface to the transducer zero point. Raw water level (WL~raw~) was
+calculate for each water and air transducer pair (n = 36) as the absolute
+measured water pressure minus the absolute air pressure ($WL_{raw} = P_w - P_a$)
+. Water level error ($\epsilon_L$) was calculated as $WL_{raw}$ minus measured
+water depth.
 
 To perform compensation without utilizing a reference pressure, a multivariate
 linear model was fit for each pair of water and air transducers using ordinary
@@ -369,11 +389,11 @@ known water depth. To account for the uncertainty of instrument error in the
 temperature compensation models, Equation 2 was fit repeatedly using a two-stage
 parametric bootstrapping approach [@buonaccorsi-2010]. The two-stage bootstrap
 first samples the observed data with replacement to create a data set of equal
-size as the observations. For each sampled coordinate ($Y, X_1, X_2, X_3$) 
-additional random error
-is added to each term, drawn from a normal distribution centered on zero with
-standard deviation equal to the known instrument accuracy for each variable (Table
-\@ref(tab:loggers)). For each transducer pair 1000 models were run.
+size as the observations. For each sampled coordinate ($Y, X_1, X_2, X_3$)
+additional random error is added to each term, drawn from a normal distribution
+centered on zero with standard deviation equal to the known instrument accuracy
+for each variable (Table \@ref(tab:loggers)). For each transducer pair 1000
+models were run.
 
 $$\epsilon_L^* = \epsilon_L + N(0, \sigma_{L'});\;\sigma_{L'} = \sqrt{2\sigma_L^2}$$
 $$T_a^* = T_a + N(0, \sigma_T)$$
@@ -389,15 +409,14 @@ were generated independently within each of the five experimental periods. Any
 slope parameters not significant at $\alpha = 0.05$ were removed and the model
 was refit iteratively until only intercept and any significant predictors
 remained. For uncertainty analysis each bootstrap model was used to predict
-$\epsilon_L$ for the observed samples within an experimental period. To evaluate 
-compensation across conditions the bootstrap models generated for the *test-data* 
-period were used to predict $\epsilon_L$ for all of the other experimental 
-periods.
-<!-- Did this predictor removal by p-value of the slope, but could also look at step-wise fitting with F-distribution -->
-For all predictions, recorded values of $\epsilon_L$ were drawn from a normal
-distribution centered on the expected value of $\epsilon_L$ with a standard
+$\epsilon_L$ for the observed samples within an experimental period. To evaluate
+compensation across conditions the bootstrap models generated for the
+SW~bias-2~ period were used to predict $\epsilon_L$ for all of the
+other experimental periods. To propagate compensation and instrument uncertainty
+to new predictions, values of $\epsilon_L$ were drawn from a normal distribution
+centered on the expected value of $\epsilon_L$ (predicted error) with a standard
 deviation equivalent to the residual standard error of the model (Equation
-\@ref(eq:estimated-error)). 
+\@ref(eq:estimated-error)).
 
 \begin{equation}
 \hat\epsilon_{L_i} \sim N(\epsilon_L^*, \sigma_{model})
@@ -409,6 +428,9 @@ For each sample record the median of all calculated $\hat\epsilon_{L_i}$ within
 an experimental period was used as predicted error in analysis with upper and
 lower prediction intervals taken as the 0.025 and 0.975 quantiles of all
 calculated $\hat\epsilon_{L_i}$ (Figure \@ref(fig:bootstrap-timeseries)).
+<!-- 
+These are equal tail intervals, and it could be better to use HDI instead
+-->
 
 ```{r bootstrap-timeseries, fig.cap="An example of a single water-barometric transducer model used to correct water level. The dotted line represents the raw water level with errors. Each of the three colored lines represent a single bootstrap model and the solid black line is the median response from all 1000 models. Gray bands show the 95% condifence bands derived from the instrument error (dark gray) and propagated error (light gray). The expanded section shows the same series for a two hour period for clarity."}
 loadd(fig_bootstrap_timeseries)
@@ -417,23 +439,30 @@ fig_bootstrap_timeseries
 
 For each water-air transducer pair, the correct compensation model was used to
 predict the error ($\hat\epsilon_L$), which was used to compensate the recorded
-water levels such that $L_c = L - \hat\epsilon_L$. where $L_c$ denotes the
-compensated water level. Both $L$ and $L_c$ were then centered on the true water
-depth by subtracting the mean of $\epsilon_L$ and $\hat\epsilon_L$,
-respectively.
+water levels such that $WL_{corr} = WL_{raw} - \hat\epsilon_L$. where $WL_corr$
+denotes the corrected water level. For analysis and plotting constant logger
+offsets were removed from both $WL_raw$ and $WL_corr$, centering the estimates
+on the true water depth. Offsets were removed by $WL_raw$ and $WL_corr$ by
+subtracting the mean of $\epsilon_L$ and $\hat\epsilon_L$ from  $WL_{raw}$ and
+$WL_{corr}$, respectively.
 
 ## Compensation Evaluation
 
+<!-- 
+fitted = all models on themselves
+predicted = SW~bias-2~ model on all other data
+-->
+
 To ensure independent evaluation of the multivariate compensation equation, the
-the bootstrapped models from the *test-data* period were evaluated using data
-from the remaining 4 experimental periods. Compensation effectiveness was
-evaluated based on two criteria: number of recorded points which fell outside of
-the range of combined instrument errors ($n_{\epsilon,i}$) and the root mean
-squared error (RMSE) from the known water depth. Effect of compensation was 
-tested as the pairwise difference in estimated marginal means of the RMSE for 
-corrected and uncorrected data within a given experimental period. Additionally 
-estimated marginal means of the corrected data RMSE were compared across 
-experimental periods.
+the bootstrapped models from the SW~bias-2~ period were evaluated
+using data from the remaining 4 experimental periods. Compensation effectiveness
+was evaluated based on two criteria: number of recorded points which fell
+outside of the range of combined instrument errors ($n_{\epsilon,i}$) and the
+root mean squared error (RMSE) from the known water depth. Effect of
+compensation was tested as the pairwise difference in estimated marginal means
+of the RMSE for corrected and uncorrected data within a given experimental
+period. Additionally estimated marginal means of the corrected data RMSE were
+compared across experimental periods.
 
 Often the purpose of developing transducer compensations is to correct
 field-collected data where true water level is unknown except for a relatively
@@ -441,11 +470,8 @@ small collection of manual calibration readings. Representative data from
 ongoing field research using these same instruments is evaluated using raw and
 compensated water levels. As true water depth was known for a relative small
 number of the recorded water level measurements, $n_{\epsilon,i}$ and RMSE were
-not calculated. Rather key characteristics of the resulting time series,
-magnitude of the diurnal fluctuation, timing of water level peaks and drawdown,
-and daily summary statistics, are compared. These metrics were chosen to
-illustrate the impact of compensation on common metrics used in reported
-hydrologic data.
+not calculated. Rather characteristics of the resulting time series of water 
+level data and derived metrics are compared (Case Study, below). 
 
 ## Uncertainty Analysis
 
@@ -455,58 +481,75 @@ corrected data. Within each experimental period the magnitude of instrument
 error and propagated error from the bootstrap prediction bounds were compared
 using a t-test between the instrument error and propagated error. Differences
 between experimental periods were compared using a one-way ANOVA and with Tukey
-Honest Significant Differences. Using the *test-data* dataset, $\hat\epsilon_L$
-was calculated as above for the *var-dis* period, and the difference between the
-corrected water level and true water depth was used to calculate new accuracy
-bounds. The new accuracy bounds were then tested against the instrument error
-bounds using a paired t-test. To avoid artificially inflating significance
-through high *n* all t-tests were performed between the fixed instrument error
-band and the mean propagated error band to hold $n=36$ within each experiment.
+Honest Significant Differences. 
+
+We believe compensation to be an necessary step to reduce bias in water 
+level measurements, but additional uncertainty introduced from compensation 
+equations could lead to higher variance around the final measurement value. To 
+evaluate the bias-variance trade-off, the $WL_{corr}$ was calcuated for the
+SW~bias-1~ using the compensation equations from SW~bias-2~. New accuracy bounds
+for the period were computed as $\mu_{\hat\epsilon_L} \pm 1.96 * \sigma_{\hat\epsilon_L}$.
+The new accuracy bounds were then tested against manufacturer instrument error
+bounds using a paired t-test. As $\hat\epsilon_L$ varies for each record in a 
+time series based on the scale of compensation, there could be a very high *n*
+for comparisons of derived and manufacturer error bounds. To avoid artificially 
+inflating significance through high *n* all t-tests were performed between the 
+fixed instrument error band and the mean propagated error band to hold $n=36$ 
+within each experiment.
 
 ## Case Study
 
 We applied the proposed correction protocol to observed wetland water level data
-to highlight propagation of uncorrected errors into subsequent analyses. The 
+to highlight propagation of uncorrected errors into subsequent analyses. The
 data for this case study comes from a headwater wetland (0.81 ha) in the western
 Upper Peninsula of Michigan, USA. The data were collected during the ice-free
-season of 2018. Levellogger 1066016 was deployed in a 5.08cm I.D. monitoring 
+season of 2018. Levellogger 1066016 was deployed in a 5.08cm I.D. monitoring
 well and levellogger 1065861 was deployed in a sheltered open air area with both
-loggers recorded synchronous 15-minute data [@vangrinsven-2017]. In the described deployment scenarios from above this would
-be unsound groundwater monitoring. We will illustrate the impact of temperature 
-bias on two common analyses: mean daily water level and evapotranspiration 
-derived from diurnal water level variation. For the former analysis we calculate
-mean uncorrected and corrected water levels on a daily timestep and compare the
-difference between them.  
+loggers recorded synchronous 15-minute data [@vangrinsven-2017]. In the
+described deployment scenarios from above this would correspond to
+temperature-differential biased groundwater monitoring (GW~biased~). We will
+illustrate the impact of temperature bias on two common analyses: mean daily
+water level and evapotranspiration (ET) derived from diurnal water level
+variation. For the former analysis we calculate mean uncorrected and corrected
+water levels on a daily timestep and compare the relationship between each
+estimate and potential evapotranspiration (PET).
 
 An approach for decomposing daily groundwater level records into
-evapotranspiration and groundwater recharge was first proposed by White [-@white-1932].
-The approach involves estimating net inflow rate during a recharge period
-typically the pre-dawn hours. This rate and the change in water level between
-recharge periods can be used to determine evapotranspiration. Converting water
-level fluctuation to surface evapotranspiration also requires accounting for the
-specific yield of the substrate surrounding the well. Loheide [-@loheideii-2008;
--@loheideii-2005] expanded this work to improve estimates of specific yield and
-account for variation in groundwater flow with water level change. The White and
-Loheide works focused on groundwater-phreatophyte interactions, but the method
-has been extended to use in wetland settings [@diamond-2018; @mclaughlin-2014;
-@telander-2015]. In these setting Loheide's readily available specific yield was
-expanded to ecosystem specific yield (E~Sy~) to acknowledge the influence of
-factors beyond the substrate surrounding the well [@mclaughlin-2014]. We applied
-the adjusted White methodology to the 15-minute wetland well data to calculate
-daily evapotranspiration for the corrected and uncorrected water level records.
-Our estimates of E~Sy~ were derived as the ratio between the change in water
-level and the change in water availability (precipitation plus snowmelt less
-potential evapotranspiration) for a previous year of data at the same location.
-This is an inverse analog of rain to rise ratio used in other studies
-[@mclaughlin-2014]. We used this analogous approach because our site is
-influenced by two factors known to obfuscate a clear E~Sy~ relationship: surface
-water exchange [@watras-2017] and additional hydrologic cycles at longer
-wavelengths (e.g. seasonal inundation patterns) [@zhu-2011]. For validation of
-the correction procedure We compared the corrected and uncorrected estimates to
-potential evapotranspiration (PET) calculated using the modified
-Hargreaves-Samani equation @hargreaves-2003 with data from nearby meteorological
-stations (Shannon, in preparation).
+evapotranspiration and groundwater recharge was first proposed by White
+[-@white-1932]. The approach involves estimating net inflow rate during a
+recharge period, typically the pre-dawn hours. This rate and the change in water
+level between recharge periods on subsequent days can be used to determine ET
+Converting water level fluctuation to surface ET also requires accounting for
+the specific yield of the substrate surrounding the well. Loheide
+[-@loheideii-2008; -@loheideii-2005] expanded this work to improve estimates of
+specific yield and account for variation in groundwater flow with water level
+change. The White and Loheide works focused on groundwater-phreatophyte
+interactions, but the method has been extended to use in wetland settings
+[@diamond-2018; @mclaughlin-2014; @telander-2015]. In these setting Loheide's
+readily available specific yield was expanded to ecosystem specific yield 
+(E~Sy~) to acknowledge the influence of factors beyond the substrate surrounding 
+the well [@mclaughlin-2014]. We applied the adjusted White methodology to the 
+15-minute wetland well data to calculate daily evapotranspiration for the raw 
+and corrected water level records, (ET~raw~ and ET~corr~, respectively).
 
+Our estimates of E~Sy~ were derived as the ratio between the change in water
+level and the change in water availability (rainfall plus snowmelt less PET)
+during the drawdown period (start of water level records to minimum observed
+water level). This is an inverse analog of the rain-to-rise ratio used in other
+studies to estimate E~Sy~ [@mclaughlin-2014]. We used this analogous approach
+because our site is influenced by two factors known to obfuscate a clear
+rain-to- rise E~Sy~ relationship: surface water exchange [@watras-2017] and
+additional hydrologic cycles at longer wavelengths (e.g. seasonal inundation
+patterns) [@zhu-2011]. E~Sy~ estimates were then fit to an asymptotic function
+with water level as the independent variable using iterated re-weighted least
+squares non-linear regression [@maechler-2020]. These models allow for
+continuous estimation of E~Sy~. Curves for E~Sy~ were derived separately using
+the raw and corrected data. The respective E~Sy~ functions were then used to
+separate the raw and corrected diurnal fluctuations into inflow and ET. For
+validation of the correction procedure we compared the ET~raw~ and ET~corr~
+values to potential evapotranspiration (PET) calculated using the modified
+Hargreaves-Samani equation @hargreaves-2003 with data from nearby meteorological
+stations.
 
 ## Software
 All data processing and analysis was performed in R [@rcoreteam-2019] using the
@@ -542,22 +585,24 @@ rmse_mod_reduced <-
 ```
 
 The model form described in Equation \@ref(eq:comp-base) showed a good fit to
-the *test-data* data with bootstrapped estimates of adjusted $R^2$ ranging from
+the SW~bias-2~ data with bootstrapped estimates of adjusted $R^2$ ranging from
 0.89 to 0.98. The bootstrap predictions had RMSE values that ranged from 0.3208
 to 0.5092 cm, which includes the uncertainty inherent in the instrument
 measurements. For reference observed error for that period ranged from -15.98 to
-10.80 cm. When the *test-data* model was used to predict other experimental
+10.80 cm. When the SW~bias-2~ model was used to predict other experimental
 periods, the RMSE of raw and corrected water level errors relative to true water
 level showed a mean change of -0.001, -0.058, 0.042, and -0.614 cm within the
-_stat-sim_, _stat_dis_, _var-sim_, and _var-dis_ experimental periods
-respectively. The reduction in RMSE for the _stat-dis_ and _var-dis_ period were
-significant at the $\alpha=0.05$ level, as was the increase in RMSE in the
-_var-sim_ period. When the two models that that showed outlier
-model performance (water transducer 2025928, Figure \@ref(fig:coefficients))
-were removed, the increase in RMSE in the _var-sim_ period was reduced to -0.018
-and was no longer significant.
+GW~best~, GW~bias~, SW~best~, and SW~bias-1~ experimental periods respectively,
+where a negative value indicates a smaller RMSE following correction. The
+reduction in RMSE for the GW~bias~ and SW~bias-1~ period were significant at the
+$\alpha=0.05$ level, as was the increase in RMSE in the SW~best~ period. When
+the two models that that showed outlier model performance (water transducer
+2025928, Figure \@ref(fig:coefficients)) were removed, the increase in RMSE in
+the SW~best~ period was reduced to -0.018 and was no longer significant. 
 
-```{r coefficients, fig.cap="Mean and 95% confidence interval for model coefficients for the 1000 bootstrap models for the *test-data* period. Panels A and C show coefficients grouping by barometric transducer and panel B shows models grouping in pairs for each water-barometric transducer pair. Water transducer 2025928 (hollow) is highlighted to illustrate its disagreement with other models."}
+**MAKE SURE YOU DISCUSS WHY THESE LOGGERS WERE REMOVED**
+
+```{r coefficients, fig.cap="Mean and 95% confidence interval for model coefficients for the 1000 bootstrap models for the SW~bias-2~ period. Panels A and C show coefficients grouping by barometric transducer and panel B shows models grouping in pairs for each water-barometric transducer pair. Water transducer 2025928 (hollow) is highlighted to illustrate its disagreement with other models."}
 loadd(fig_coefficients_panel)
 fig_coefficients_panel
 ```
@@ -589,24 +634,24 @@ rmsetest <-
            rmse_test$baro_sn)
 ```
 
-Models developed under *test-dat* conditions and applied to *var-dis* data
-showed good performance relative to the models derived under *var-dis*
+Models developed under SW~bias-2~ conditions and applied to SW~bias-1~ data
+showed good performance relative to the models derived under SW~bias-1~
 conditions. For barometric transducer 1066019 there was not a significant
 difference in RMSE between the two sets of predictions (`r rmsetest[["1066019"]]`). 
-Models developed under *test-dat* showed a decline in performance relative to 
-*var-dis* models with a significant decrease in RMSE (`r rmsetest[["1065861"]]`).
+Models developed under SW~bias-2~ showed a decline in performance relative to 
+SW~bias-1~ models with a significant decrease in RMSE (`r rmsetest[["1065861"]]`).
 
 Prior to compensation 0 to 57% of measured points fell outside of the 95%
 confidence band defined by the combined stated instrument errors of the
-barometric and water pressure transducers, with only the *var-dis* period
+barometric and water pressure transducers, with only the SW~bias-1~ period
 showing more than 1% outside of the error range (Table \@ref(tab:oor)).
-Following compensation only 6% of *var-dis* points fell outside of that same
+Following compensation only 6% of SW~bias-1~ points fell outside of that same
 confidence band, but small increases of points outside of the band were observed
-for *var-sim* and *stat-sim*. When the interval is expanded to include to
-instrument uncertainty and the errors associated with temperature artifacts only
-*var-dis* showed any raw data points (35%) outside of the expanded error band.
-Following compensation this fell to 0.35% of points for *var-dis* but increased
-from 0 to 0.3% for *var-sim*. All rectified points that fell outside of the
+for SW~best~ and GW~best~. When the interval is expanded to include instrument 
+uncertainty and the errors associated with temperature artifacts only
+SW~bias-1~ showed any raw data points (35%) outside of the expanded error band.
+Following compensation this fell to 0.35% of points for SW~bias-1~ but increased
+from 0 to 0.3% for SW~best~. All rectified points that fell outside of the
 instrument and propagated error bands were associated with the two abnormal
 loggers mentioned above.
 
@@ -687,16 +732,17 @@ knitr::kable(unc_table,
              caption = "Mean Propagated and Instrument for all 36 transducer pair models by experimental period. Difference and standard error shows the change in confidence band size when all errors are incorporated and were tested for significance using a paired t-test within each experimental period (denoted by '*'). Difference in propagated errors between experimental periods was tested using a one-way ANOVA.")
 ```
 
-Instrument accuracy at a 95% confidence band for all models was either `r paste(round(unique(2*qnorm(0.975)*combined_data$testing$instrument_error_cm), 3), collapse = ", or ")`cm,
+Instrument accuracy at a 95% confidence band for all models was either 
+`r paste(round(unique(2*qnorm(0.975)*combined_data$testing$instrument_error_cm), 3), collapse = ", or ")`cm,
 with one of the three transducer models having greater stated accuracy (Table
 \@ref(tab:loggers)). When measurement errors and temperature effects were 
 propagated to represent full uncertainty, every experimental period showed a
 significant increase in uncertainty bounds. The magnitude of the increase varied
-among experimental treatments from `r unctests[["stat-sim"]]`cm for *stat-sim* 
-to `r unctests[["test-dat"]]`cm for *test-data* (Table \@ref(tab:uncertainty)).
+among experimental treatments from `r unctests[["stat-sim"]]`cm for GW~best~ 
+to `r unctests[["test-dat"]]`cm for SW~bias-2~ (Table \@ref(tab:uncertainty)).
 Significant differences were observed in propagated errors between experimental
-periods. Experimental period *test-dat* had significantly larger uncertainty than
-*var-dis*, which was significantly larger than the remaining three periods.
+periods. Experimental period SW~bias-2~ had significantly larger uncertainty than
+SW~bias-1~, which was significantly larger than the remaining three periods.
 
 ```{r new-errors}
 vardis <- predicted[experiment == "var-dis"]
@@ -720,10 +766,10 @@ vardistests <-
 
 Due to large discrepancies in model accuracy between the barometric transducers
 we compared the propagated errors and the instrument errors separately for each
-set of 18 models. For each model the new confidence band was defined as
+set of 18 models. <!--For each model the new confidence band was defined as
 $2*Z_{0.025}*SD(L_c - L)$. To ensure independent and valid evaluation, these
-tests were only performed for the *var-dis* dataset using predictions from the
-*test-data* bootstrap models. For transducer 1066019 the propagated errors were
+tests were only performed for the SW~bias-1~ dataset using predictions from the
+SW~bias-2~ bootstrap models.--> For transducer 1066019 the propagated errors were
 found to be significantly less than the instrument error (mean 
 `r vardissign[["1066019"]]` in 95% confidence bounds = 
 `r abs(vardistests[["1066019"]])`cm). Transducer 1065861 was found to have
@@ -735,23 +781,17 @@ propagated errors that were significantly higher than instrument error (mean
 
 ```{r}
 
-daily_wl_comparisons <- 
-  water_balance[,.(raw_wl = mean(raw_compensated_level_cm, na.rm = TRUE), 
-                   corrected_wl = mean(corrected_compensated_level_cm, na.rm = TRUE),
-                   instrument_error_cm = median(instrument_error_cm, na.rm = TRUE)),
-                by = .(sample_date)][, error_cm := raw_wl - corrected_wl]
-
 daily_wl_errors_n_days <- 
-  sum(daily_wl_comparisons$error_cm > daily_wl_comparisons$instrument_error_cm)
+  sum(daily_water_balance$error_cm > daily_water_balance$instrument_error_cm)
 
 daily_wl_errors_percent <- 
-  paste(round(daily_wl_errors_n_days / nrow(daily_wl_comparisons), 1), '%')
+  paste(100*round(daily_wl_errors_n_days / nrow(daily_water_balance), 3), '%')
 
 max_daily_error <- 
-  round(abs(max(daily_wl_comparisons$error_cm, na.rm = TRUE)), 1)
+  round(abs(max(daily_water_balance$error_cm, na.rm = TRUE)), 1)
 
 min_daily_error <- 
-  round(abs(min(daily_wl_comparisons$error_cm, na.rm = TRUE)), 1)
+  round(abs(min(daily_water_balance$error_cm, na.rm = TRUE)), 1)
 
 white_cor <- 
   abs(cor(daily_water_balance[(dry_day), .(pet_cm_d, raw_et_cm_d, corrected_et_cm_d)],
@@ -766,41 +806,39 @@ et_cor <-
 ```
 
 
-For much of the study period the overall trend in water levels track well
+For much of the study period the overall trend in water levels tracks well
 between the raw and corrected levels (Figure \@ref(fig:case-study-panel)A).
-Differences become noticeable when the common analyses are tested. When mean raw
-and corrected water levels are compared `r daily_wl_errors_n_days` days (
-`r daily_wl_errors_percent`) were found to have temperature corrections that
-exceeded combined instrument error (Figure \@ref(fig:case-study-panel)B). Daily
-mean errors were greatest in the fall, and smallest during the summer months,
-ranging from a `r min_daily_error` cm underestimate and `r max_daily_error` cm 
-overestimate of mean daily water level.  
-
-*Align column edges and shaded vertical bar in panel B*
+Differences become apparent when we look at the daily mean water level and the
+derived ET estimates. When mean WL~raw~ and WL~corr~ are compared
+`r daily_wl_errors_n_days` days (`r daily_wl_errors_percent`) were found to have 
+temperature corrections that exceeded combined instrument error 
+(Figure \@ref(fig:case-study-panel)B). Daily mean errors were greatest in the 
+fall, and smallest during the summer months, ranging from a `r min_daily_error` 
+cm underestimate and `r max_daily_error` cm overestimate of mean daily water 
+level.  
 
 ```{r case-study-panel, fig.width=7.5, fig.cap='A comparison of corrected and uncorrected wetland water levels. Panel A shows the entire growing season at 15-minute interval. Panel B shows the error in daily mean water level. Panel B dashed lines represent manufacturer instrument error and darker columns indicate errors greater than combined instrument error. The vertical shaded bar in Panels A and B highlight the two days shown in Panel C. Panel C shows details of two diurnal water level cycles and the decomposed components of the @white-1932 method.'}
 knitr::include_graphics("../output/figures/case_study_panel.pdf")
 ```
 
-Errors at the sub-daily range were present between the raw and corrected. The
-two days shown in Figure \@ref(fig:case-study-panel)C have daily mean water
-level errors within the expected instrument error. The inflow rate and estimates
-of ET derived from these diurnal fluctuations are qualitatively different upon
-visual inspection. The uncorrected data shows higher inflow and corresponding
-higher ET for periods with similar raw and corrected water level change. To
-quantify the qualitative differences E~Sy~ was derived separately using the raw
-and corrected data. The respective E~Sy~ functions were then used to separate
-the raw and corrected diurnal fluctuations into inflow and ET. During the 
-drawdown period used to calculate E~Sy~ the temperature-induced error was generally
-small resulting in similar E~Sy~ functions. While there is no
-validation data to compare estimated inflow to actual inflow, we can compare
-estimated ET to PET. For the following results only dry days were used, where
-dry is defined as no daily rainfall or snowmelt greater than 1 mm in a two day
-period. ET~raw~ showed negligible correlation with PET (`r pet_cor["raw_et_cm"]`), 
-while ET~corr~ showed moderate correlation with PET (`r pet_cor["corrected_et_cm"]`).
+Error at the sub-daily range were also found when comparing WL~raw~ and
+WL~corr~. The two days shown in Figure \@ref(fig:case-study-panel)C have daily
+mean water level errors within the expected instrument error but the inflow rate
+and estimates of ET derived from these diurnal fluctuations are qualitatively
+different upon visual inspection. The uncorrected data shows higher inflow and
+corresponding higher ET even while the days show similar raw and corrected water
+level change. During the drawdown period used to calculate E~Sy~ the temperature-induced
+error was generally small (Figure \@ref(fig:case-study-panel)B) resulting in
+similar E~Sy~ functions (not shown). While there is no validation data to 
+compare estimated inflow to actual inflow, we can compare estimated ET to PET. 
+For the following results only dry days were used to avoid the complicating factors
+of interception, suppressed ET, and variable water level increase We defined dry 
+days as no daily rainfall or snowmelt greater than 1 mm in a two day period. 
+ET~raw~ showed negligible correlation with PET (`r pet_cor["raw_et_cm"]`), while 
+ET~corr~ showed moderate correlation with PET (`r pet_cor["corrected_et_cm"]`). 
 Fitting an OLS linear regression between estimated ET and PET showed no 
-significant slope between ET~raw~ and PET, but a significant slope, close to
-1 for ET~corr~ and PET (Figure \@ref(fig:et-to-pet-panel)). 
+significant slope between ET~raw~ and PET, but a significant slope, close to 1 
+for ET~corr~ and PET (Figure \@ref(fig:et-to-pet-panel)).
 
 ```{r et-to-pet-panel, fig.cap = "Linear regession fit between potential evapotranpiration and White method estimates of evapotranspiration. The estimates from the raw data showed a significant intercept but not a significant slope. The estimates from the corrected data showed a significant intercept and slope. The dashed line shows a 1:1 relationship to represent perfect estimation of PET."}
 
@@ -811,7 +849,24 @@ knitr::include_graphics("../output/figures/et_to_pet_panel.pdf")
 
 # Discussion
 
-## Single Equation Compensations
+## Temperature-Induced Bias and Compensation Equations
+
+INCORPORATE:
+_For absolute pressure transducers we likely disregard the temperature differential...
+Previous studies have examined absolute transducer error due to individual
+transducer error [@moore-2016] and due to temperature differences between
+transducers [@mclaughlin-2011; @cuevas-2010]. @liu-2015 lays out the underlying
+physics that could lead to gauge transducer errors when a temperature difference
+exists along the vent tube. There is no analogous physical process for absolute
+transducers, which suggests that errors in absolute transducers are unlikely to 
+arise directly as a result of temperature difference._
+
+DO I MENTION HOW THIS HAS AN ADVANTAGE OVER USING EXTERNAL BAROMETRIC PRESSURE?
+Barometric compensation equations are similar to those derived from multi-year
+deployment using external barometric data. More data points = cancel out bias
+between the external data and the loggers. It may be difficult to ensure that 
+all bias is removed doing compensation with external data without a sufficiently
+longer period of record.
 
 Our results show that it is possible to correct water-depth derived from two
 pressure transducers without the need to reference to an external data source.
@@ -848,7 +903,7 @@ sensitivity of transducer to temperature and would vary between manufacturers
 and instruments.
 
 ```{r tdiff-evaluation, eval = FALSE}
-# Best performing test-dat model based on mean rmse of *var-dis* prediction
+# Best performing test-dat model based on mean rmse of SW~bias-1~ prediction
 # Best model for test-dat: water_sn == "1062534" & baro_sn == "1066019"
 
 test <- combined_data$training[water_sn == "1062534" & baro_sn == "1066019"][, temp_diff := air_temperature_c - water_temperature_c]
@@ -933,13 +988,13 @@ developed for all deployed transducers. Building upon that we have demonstrated
 that it is possible to develop a single lab-based correction whose structure is
 suitable for varied deployment environments. However, developing a compensation
 equation under conditions similar to field conditions is necessary to ensure
-accurate compensation. The degraded predictive performance of *test-data* models
-under *var-sim* conditions relative to all other periods highlights this point.
-Under *var-sim* conditions we observed a small but significant increase in RMSE
+accurate compensation. The degraded predictive performance of SW~bias-2~ models
+under SW~best~ conditions relative to all other periods highlights this point.
+Under SW~best~ conditions we observed a small but significant increase in RMSE
 for corrected water levels. We believe that the inaccuracies have two potential
-causes at their root. The first is that the *var-sim* conditions had higher
+causes at their root. The first is that the SW~best~ conditions had higher
 temperatures than any of the other experimental periods. Models developed on
-*test-data* data were therefore extrapolating when predicting under *var-sim*
+SW~bias-2~ data were therefore extrapolating when predicting under SW~best~
 conditions. The second possible reason for decreased predictive power is the
 internal temperature compensation of the pressure transducers. @freeman-2004
 anticipated that isolating and correcting temperature-driven errors would be
@@ -961,15 +1016,15 @@ range of conditions have been captured during development.
 Model performance in this study was highly dependent on individual transducers.
 The barometric transducer 1065861 appears to be more sensitive to air
 temperature and high rates of temperature change, leading to larger errors at
-the beginning and end of the *var-dis* period (Figure \@ref(fig:bootstrap-timeseries)). This is further
+the beginning and end of the SW~bias-1~ period (Figure \@ref(fig:bootstrap-timeseries)). This is further
 supported by the increased error associated with the compensation models for
 transducer 1065861 relative to transducer 1066019 (Figure of sigma distribution
 of bootstrapped models). Transducers 2025928 and 2030899 also show larger
-errors, and account for all of the increase in OOR measurements in the *var-sim*
+errors, and account for all of the increase in OOR measurements in the SW~best~
 period. When looking at the distribution of model RMSEs, transducer 2013939
 showed no overlap in the RMSE range of all other models. While this suggests
 that the logger may be overfit to the training data, it appears that during the
-*var-sim* period the direction of the relationship between water temperature and
+SW~best~ period the direction of the relationship between water temperature and
 error reversed relative to all other experimental periods. The same occurred for
 loggers 2064734 and 1062528. At this time it is impossible to tell if this is
 due to the high temperatures during this period, differential internal
@@ -1077,8 +1132,8 @@ water transducers are placed in similar thermal regimes in order to avoid or
 reduce compensation errors. Even under such thermal regimes errors do occur,
 though the magnitude of the error may be similar to instrument error and not be
 apparent when evaluating the need for compensation. Of the 1000 models fit per
-experimental period, `r imods[["stat-sim"]]`% of *stat-sim*, 
-`r imods[["stat-dis"]]`% of *stat-dis*, and `r imods[["var-sim"]]`% of *var-sim*
+experimental period, `r imods[["stat-sim"]]`% of GW~best~, 
+`r imods[["stat-dis"]]`% of *stat-dis*, and `r imods[["var-sim"]]`% of SW~best~
 final models were intercept-only. Under increasingly ideal conditions more models
 showed no significant relationship with air temperature, water temperature, or
 rate of change of air temperature. The error associated with these intercept
@@ -1135,24 +1190,23 @@ various uncertainty intervals from this study added as thresholds for comparison
 
 ## Case Study
 
-For both analyses performed in the case study we found significant errors
+For both analyses performed in the case study we found significant bias
 introduced due to temperature-induced errors in WL~biased~. The purpose of water
-level records in monitoring and research is enable a downstream analysis.
-Unaccounted for errors in the initial recording have measurable impacts, which
+level records in monitoring and research is to enable further analysis.
+Unaddressed errors in the initial recording have measurable impacts, which
 could lead to erroneous conclusions and potentially real-world actions that are
 at best misguided and at worst harmful. The presence of detectable error is
 dependent on the scale of the analysis performed. In Figure
 \@ref(fig:case-study-panel), the two highlighted days in panel C show
-approximately a 1.7-fold difference in ET estimates, representing estimation 
-errors of 170% and 166% of ET~corr~. In Panel B we see that the
-daily mean error on these days show error within the range of expected
-instrument error. Quantifiable errors are more likely to be detected (**& to be
-of a larger percentage magnitude?**) at finer scales (sub-daily) than at coarser
-scales (daily). Figure \@ref(fig:error-scale) shows the result of increasing
-data smoothing to identify a scale where temperature errors are not detectable.
-It shows that a moving average with a window size of *ZZZ* days is necessary to
-completely mask the effects so that 95% of errors are within the range of
-instrument error.  
+approximately a 1.7-fold difference in ET estimates, representing estimation
+errors of 170% and 166% of ET~corr~. In Panel B we see that the daily mean error
+on these days show error within the range of expected instrument error.
+Quantifiable errors are more likely to be detected at finer scales (sub-daily)
+than at coarser scales (daily) as aggregation smooths out evenly distributed
+errors. But during periods where the errors are systematically positive or
+negative no level of smoothing will bring temperature-induced errors within the
+range of instrument error. The errors observed in the fall are one such period
+for this case study (Figure \@ref(fig:case-study-panel)).
 
 We observed the largest errors in the fall after wetland water levels had
 rebounded to the surface. This is due to a combination of seasonal air and water
@@ -1161,32 +1215,28 @@ water temperatures. Figure \@ref(fig:drivers-panel)A & C show that these
 conditions led to the largest errors in our observational experiment. As the air
 temperatures decline in the fall and wetland water temperatures increase due to
 groundwater inputs, the temperature bias increases. Errors in the spring would
-likely be large, but slightly smaller than fall errors with low air temperatures
+likely be large, but somewhat smaller than fall errors with low air temperatures
 and low water temperatures.
 
-<!-- 
-Data doesn't support this straightforward an interpretation but it could be worth exploring this idea more:
-During the summer daily mean
-error appears to be correlated with response to precipitation events (coincident
-peaks in Figure \@ref(fig:case-study-panel) Panels A & B), while the
-precipitation response peak in mid-June does not show an increase in daily mean
-errors. We suggest that in mid-June the high water levels in the wetland masked
-a water level temperature response, while in the drier summer months, wetland
-water temperatures showed an increased response, resulting increased error.
--->
-
-It is important to note that while ET~corr~ showed a moderate correlation with
-PET a significant slope near 1, the R^2^ of the OLS model was low. This is in
-line with other White-method separation studies where low R^2^ values are
-observed. @soylu-2012 found R^2^ values of less than 0.2 for the White method
-and 0.33--0.4 for their proposed sine-wave based method. @mclaughlin-2014 does
-not report R^2^, but their $ET/PET$ index shows high variability, suggesting low
-R^2^. Even with direct eddy flux measurement of ET, @lafleur-2005 found an R^2^
-as low as 0.56 between ET and PET for a single year of data. Additionally our
-wetland could be expected to have poor performance or even be unusable for this
-analysis. Nearby surface water dynamics and connectivity to other surface water
-sources has been shown to have high levels of interference with determining
-E~Sy~ or White-method ET [@watras-2017; @zhu-2011].
+There were two potential sources of error when calculating ET using the modified
+White method: the magnitude and shape of the diurnal fluctuations and the
+determination of E~Sy~. We have concluded that the poor correlation between
+ET~raw~ and PET is the result of the diurnal water level fluctuations. We did
+not see evidence that the E~Sy~ calculations played a role as the final E~Sy~
+functions were similar for the raw and corrected datasets (**MODELS IN
+SUPPLMENTARY MATERIAL**). It is important to note that while ET~corr~ showed a
+moderate correlation with PET and a significant slope near 1, the R^2^ of the
+OLS model was low. This is in line with other White-method separation studies
+where low R^2^ values are observed. @soylu-2012 found R^2^ values of less than
+0.2 for the White method and 0.33--0.4 for their proposed sine-wave based
+method. @mclaughlin-2014 does not report R^2^, but their $ET/PET$ index shows
+high variability, suggesting low R^2^. Even with direct eddy flux measurement of
+ET, @lafleur-2005 found an R^2^ as low as 0.56 between ET and PET in a Canadian
+shrub wetland. Additionally our wetland could be expected to have poor
+performance or even be unusable for this analysis. Nearby surface water dynamics
+and connectivity to other surface water sources has been shown to have high
+levels of interference with determining E~Sy~ or White-method ET [@watras-2017;
+@zhu-2011]. 
 
 <!--
 Low R-squared not suprising:
@@ -1199,13 +1249,49 @@ ET/PET, suggesting low r^2
 @soylu-2012 shows White method with r^2 <= 0.2 & proposed method with 0.33 <= r^2 <= 0.4 
 -->
 
+## Abosulte vs Gauge
+
+@mclaughlin-2011 concluded that temperature differentials between water and
+barometric pressure measurements introduced detectable artifacts with a 1.5 cm
+increase in the diurnal variation. This result is similar to @cuevas-2010, who
+found a 19% increase in streamflow diurnal fluctuation when barometric and water
+transducers were deployed in different thermal settings. Both
+@mclaughlin-2011 and @cuevas-2010 focused on absolute transducers, but similar
+work has also been performed using vented gauge transducers. @cain-2004 found
+that temperature changes within the vent-tube of gauge pressure transducers
+introduce water level artifacts, which was explored further by
+@liu-2015 in multi-day laboratory and long-term field experiments. Their
+findings show that errors can be introduced due to water temperature or rapid
+fluctuations in air temperature. Their laboratory experiment found 1.4
+$mm^oC^{-1}$ error as water temperature changed (with constant air temperature).
+These corrections corresponded to errors of up to 7mm in their field
+experiments, with at least some of that error due to the rate of temperature
+change affecting the connection to the atmosphere via the vent tube.
+They also highlight the impact of rate of temperature change, with more rapid
+gradients inducing larger water level errors. 
+
+<!--
+Errors due to rapid temperature fluctuations can be expected to affect both
+absolute and gauge transducers as internal electronics and membranes must
+equilibrate to the new temperatures [@freeman-2004].
+-->
+
 # Conclusion and Recommendations
+
+THERE CAN STILL BE TEMPERATURE INDUCED BIAS FROM 'BEST PRACTICES' DEPLOYMENT. 
+Especially when monitoring water sources that vary in temperature. This could
+be surfacewater, or shallow ground water that has thermal signatures from rain
+and snowmelt events.
 
 - For each transducer check for *all* potential error-inducing sources. Each
 transducer should be checked for temperature gradients and rate of change of
 temperature or pressure. Our results show that even when deployed under ideal
 conditions temperature-induced errors can result in accuracy less than
-instrument accuracy.
+instrument accuracy. (_@liu-2015 and @moore-2016 go on to suggest that all
+transducers betested for inaccuracies over the range of temperature measurements
+and individual compensation equations be developed to apply to collected data._)
+
+- Even under best practices thermal error is a problem
 
 - To maximize compensation benefits collect validation datasets to estimate 
 the accuracy of corrected datasets.
@@ -1222,6 +1308,8 @@ above approaches are applicable, but offsets must be carefully calculated.
 - The temporal scale of analysis dictates the impact of temperature-induced 
 errors. Finer resolution analyses require more intense scrutiny of sources of
 error.
+
+**ADD SOMETHING ABOUT MITIGATION OF ERRORS TO ECHO NEW LINE IN INTRO**
 
 \acknowledgments
 The acknowledgments must list:
