@@ -81,7 +81,8 @@ plan <-
                                "corrected_et_cm_15m",
                                "external_raw_et_cm_15m",
                                "external_corrected_et_cm_15m"),
-                       first = c("total_input_cm_d",
+                       first = c("instrument_error_cm", 
+                                 "total_input_cm_d",
                                  "pet_cm_d", 
                                  "tmin_c",
                                  "tmax_c",
@@ -92,7 +93,8 @@ plan <-
                                      n = 2, 
                                      FUN = max,
                                      align = 'right', 
-                                     na.rm = TRUE) < 0.1),
+                                     na.rm = TRUE) < 0.1,
+                error_cm = raw_compensated_level_cm - corrected_compensated_level_cm),
 
 # Figures -----------------------------------------------------------------
 

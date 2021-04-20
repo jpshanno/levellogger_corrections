@@ -616,12 +616,14 @@ create_drivers_panel <-
       ggplot(dat_1,
              aes(x = air_temperature_c,
                  y = raw_error_cm)) + 
-      geom_point(color = "#329985") +
+      geom_point(color = pale_pal[[1]],
+                 shape = 20) +
       geom_smooth(method = "lm",
                   formula = "y~x",
                   se = FALSE,
                   color = "black") +
-      labs(x = expression(paste("Air Temperature, ", degree, "C")),
+      labs(title = "Error as a function of\nAir Temperature",
+           x = expression(paste("Air Temperature, ", degree, "C")),
            y = "Raw Error, cm")
     
     fig1b <- 
@@ -629,12 +631,14 @@ create_drivers_panel <-
              aes(x = water_temperature_c,
                  y = raw_error_cm,
                  color = baro_sn)) + 
-      geom_point(color = "#329985") +
+      geom_point(color = pale_pal[[1]],
+                 shape = 20) +
       geom_smooth(method = "lm",
                   formula = "y~x",
                   se = FALSE,
                   color = "black") +
-      labs(x = expression(paste("Water Temperature, ", degree, "C")),
+      labs(title = "Error as a function of\nWater Temperature",
+           x = expression(paste("Water Temperature, ", degree, "C")),
            y = "Raw Error, cm")
     
     fig1c <- 
@@ -642,16 +646,27 @@ create_drivers_panel <-
              aes(x = water_temperature_c,
                  y = raw_error_cm - fitted(lm(raw_error_cm ~ air_temperature_c + delta_at_01c_min, data = dat_1)),
                  color = baro_sn)) + 
-      geom_point(color = "#329985") +
+      geom_point(color = pale_pal[[1]],
+                 shape = 20) +
       geom_smooth(method = "lm",
                   formula = "y~x",
                   se = FALSE,
                   color = "black") +
-      labs(x = expression(paste("Water Temperature, ", degree, "C")),
-           y = "Raw Error minus Air Temperature Effect, cm") +
-      theme_few()
+      labs(title = "Residual Error after Air\nTemperature Trend is Removed",
+           x = expression(paste("Water Temperature, ", degree, "C")),
+           y = "Error (cm)")
     
-    {fig1a + fig1b + fig1c + plot_annotation(tag_levels = "A")}
+    fig1 <-
+      {fig1a / fig1b / fig1c + plot_annotation(tag_levels = "A")} &
+      theme_minimal(base_size = 12) + 
+      theme(plot.tag.position = c(0, 1),
+            plot.title = element_text(size = 10))
+    
+    ggsave(plot = fig1,
+           filename = "output/figures/sources_of_error_scatter_plot_panel.pdf",
+           height = 8,
+           width = 3,
+           units = 'in')
   }
 
 create_bootstrap_timeseries <- 
@@ -704,14 +719,38 @@ create_bootstrap_timeseries <-
                   as.POSIXct("2020-06-10 20:00", tz = "EST5EDT")),
           sample := "yes"]
     
-    ggplot(mods2, 
-           aes(x = sample_time)) +
+    main <- 
+      ggplot(mods2, 
+             aes(x = sample_time)) +
       geom_ribbon(aes(ymin = propagated_lower,
                       ymax = propagated_upper),
-                  fill = "gray85") +
+                  fill = "gray65") +
       geom_ribbon(aes(ymin = instrument_lower,
                       ymax = instrument_upper),
-                  fill = "gray75") +
+                  fill = "gray85") +
+      geom_line(aes(y = rect_water_level_cm,
+                    color = as.factor(model_rep)),
+                show.legend = FALSE,
+                size = rel(0.2)) +
+      geom_line(aes(y = orig_rect_water_level_cm),
+                color = "gray5") +
+      geom_line(aes(y = centered_water_level_cm),
+                color = "gray5",
+                linetype = "dotted") +
+      coord_cartesian(expand = FALSE) +
+      labs(y = "Water Level", 
+           x = "Sample Time") +
+      theme_minimal(base_size = 14)
+    
+    child <-
+      ggplot(mods2[sample == "yes"], 
+             aes(x = sample_time)) +
+      geom_ribbon(aes(ymin = propagated_lower,
+                      ymax = propagated_upper),
+                  fill = "gray65") +
+      geom_ribbon(aes(ymin = instrument_lower,
+                      ymax = instrument_upper),
+                  fill = "gray85") +
       geom_line(aes(y = rect_water_level_cm,
                     color = as.factor(model_rep)),
                 show.legend = FALSE) +
@@ -722,105 +761,155 @@ create_bootstrap_timeseries <-
                 color = "gray5",
                 linetype = "dotted") +
       coord_cartesian(expand = FALSE) +
-      labs(y = "Water Level", 
+      labs(y = "Water Level (cm)", 
            x = "Sample Time") +
-      facet_zoom(x = sample == "yes",
-                 zoom.size = 0.5, 
-                 horizontal = FALSE,
-                 ylim = range(mods2[sample == "yes", rect_water_level_cm])) +
-      theme_few()+ 
-      theme(strip.background = element_rect(color = "black",
-                                            size = rel(1.5)))
-  }
+      scale_y_continuous(breaks = c(27.5, 28.5, 29.5),
+                         position = 'right') +
+      scale_x_datetime(breaks = c(as.POSIXct("2020-06-10 18:30", tz = "EST5EDT"),
+                                  as.POSIXct("2020-06-10 19:30", tz = "EST5EDT")),
+                       date_labels = "%b %m %H:%M",
+                       position = 'top') +
+      theme_minimal(base_size = 12) +
+      theme(axis.title = element_blank(),
+            # axis.text.y = element_blank(),
+            plot.background = element_rect(fill = 'white',
+                                           color = 'black'))
+    
+    fig2 <- 
+      main + inset_element(child, left = 0.05, bottom = 0.05, right = 0.65, top = 0.5)
+  
+    ggsave(plot = fig2,
+           filename = "output/figures/bootstrap_correction_timeseries_linegraph_and_ribbon_panel.pdf",
+           height = 3.75,
+           width = 8.4,
+           units = 'in')
+    
+    }
 
 create_coefficients_panel <- 
   function(models){
     
-    dat4a <- 
-      models[experiment == "test-dat", 
-                       .(y = mean(air_temperature_c),
-                         ymin = quantile(air_temperature_c, 0.025), 
-                         ymax = quantile(air_temperature_c, 0.975)), 
-                       by = .(water_sn, baro_sn)] 
+    font_size <- 
+      13
     
-    dat4a[, outlier_sn := ifelse(water_sn == "2025928",
-                                 "yes",
+    dat4 <- 
+      models[experiment == "test-dat"]
+    
+    
+    dat4[, outlier_status := ifelse(water_sn %in% c("2025928", "2030899"),
+                                       "yes",
+                                       "no")]
+    dat4[, outlier_sn := ifelse(water_sn %in% c("2025928", "2030899"),
+                                 water_sn,
                                  "no")]  
+    
+    dat4a <- 
+      dat4[, 
+           .(y = mean(air_temperature_c),
+             ymin = quantile(air_temperature_c, 0.025), 
+             ymax = quantile(air_temperature_c, 0.975)), 
+           by = .(water_sn, baro_sn, outlier_status, outlier_sn)] 
+    
+    dat4b <- 
+      dat4[, 
+           .(y = mean(water_temperature_c),
+             ymin = quantile(water_temperature_c, 0.025), 
+             ymax = quantile(water_temperature_c, 0.975)), 
+           by = .(water_sn, baro_sn, outlier_status, outlier_sn)] 
+    
+    dat4c <- 
+      dat4[, 
+           .(y = mean(delta_at_01c_min),
+             ymin = quantile(delta_at_01c_min, 0.025), 
+             ymax = quantile(delta_at_01c_min, 0.975)), 
+           by = .(water_sn, baro_sn, outlier_status, outlier_sn)]
     
     fig4a <- 
       ggplot(dat4a,
              aes(y = y, ymin = ymin, ymax = ymax,
                  x = baro_sn,
                  group = water_sn,
-                 color = outlier_sn,
+                 color = outlier_status,
                  shape = outlier_sn)) +
-      geom_pointrange(position = position_dodge(width = 0.8),
+      geom_pointrange(position = position_dodge(width = 0.9),
                       show.legend = FALSE,
-                      fill = "white") +
-      labs(y = expression(hat(beta)[Air~Temperature]),
+                      fill = "white",
+                      size = 0.25) +
+      annotate("text",
+               x = "1065861",
+               y = -0.17,
+               label = "Transducer 2025928",
+               hjust = 0,
+               # fill = "#ffffff80",
+               # label.colour = NA
+               ) +
+      labs(title = expression(hat(beta)[Air~Temperature]),
+           y = "Estimate",
            x = "Barometric Transducer Serial Number") +
-      scale_shape_manual(values = c(19, 21)) +
-      theme(axis.text.x = element_text(angle = 45,
-                                       vjust = 1,
-                                       hjust = 1))
+      scale_shape_manual(values = c('no' = 19, "2025928" = 21, "2030899" = 25)) +
+      theme_minimal(base_size = font_size) +
+      theme(axis.text.x = element_text(vjust = 1))
     
-    dat4b <- 
-      models[experiment == "test-dat", 
-                       .(y = mean(water_temperature_c),
-                         ymin = quantile(water_temperature_c, 0.025), 
-                         ymax = quantile(water_temperature_c, 0.975)), 
-                       by = .(water_sn, baro_sn)] 
-    
-    dat4b[, outlier_sn := ifelse(water_sn == "2025928",
-                                 "yes",
-                                 "no")]  
     
     fig4b <- 
       ggplot(dat4b,
              aes(y = y, ymin = ymin, ymax = ymax,
                  x = water_sn,
                  group = baro_sn,
-                 color = outlier_sn,
+                 color = outlier_status,
                  shape = outlier_sn)) +
-      geom_pointrange(position = position_dodge(width = 0.8),
+      geom_pointrange(position = position_dodge(width = 1),
                       show.legend = FALSE,
-                      fill = "white") +
-      labs(y = expression(hat(beta)[Water~Temperature]),
+                      fill = "white",
+                      size = 0.25) +
+      annotate("text",
+               x = "2059683",
+               y = -0.26,
+               label = "Transducer\n2030899",
+               hjust = 0,
+               vjust = 0.25,
+               # fill = "#ffffff80",
+               # label.colour = NA
+               ) +
+      labs(title = expression(hat(beta)[Water~Temperature]),
+           y = "Estimate",
            x = "Water Transducer Serial Number") +
-      scale_shape_manual(values = c(19, 21)) +
-      theme(axis.text.x = element_text(angle = 45,
-                                       vjust = 1,
+      scale_shape_manual(values = c('no' = 19, "2025928" = 21, "2030899" = 25)) +
+      theme_minimal(base_size = font_size) +
+      theme(axis.text.x = element_text(angle = 90,
+                                       vjust = 0.5,
                                        hjust = 1))
-    
-    dat4c <- 
-      models[experiment == "test-dat", 
-             .(y = mean(delta_at_01c_min),
-               ymin = quantile(delta_at_01c_min, 0.025), 
-               ymax = quantile(delta_at_01c_min, 0.975)), 
-             by = .(water_sn, baro_sn)]
-    
-    dat4c[, outlier_sn := ifelse(water_sn == "2025928",
-                                 "yes",
-                                 "no")]
     
     fig4c <- 
       ggplot(dat4c,
              aes(y = y, ymin = ymin, ymax = ymax,
                  x = baro_sn,
                  group = water_sn,
-                 color = outlier_sn,
+                 color = outlier_status,
                  shape = outlier_sn)) +
-      geom_pointrange(position = position_dodge(width = 0.8),
+      geom_pointrange(position = position_dodge(width = 0.9),
                       show.legend = FALSE,
-                      fill = "white") +
-      labs(y = expression(hat(beta)[Delta~Air~Temperature]),
+                      fill = "white",
+                      size = 0.25) +
+      labs(title = expression(hat(beta)[Delta~Air~Temperature]),
+           y = "Estimate",
            x = "Barometric Transducer Serial Number") +
-      scale_shape_manual(values = c(19, 21)) +
-      theme(axis.text.x = element_text(angle = 45,
-                                       vjust = 1,
-                                       hjust = 1))
+      scale_shape_manual(values = c('no' = 19, "2025928" = 21, "2030899" = 25)) +
+      theme_minimal(base_size = font_size) +
+      theme(axis.text.x = element_text(vjust = 1))
     
-    fig4a + fig4b + fig4c + plot_annotation(tag_levels = "A")
+    coef_fig <- 
+      {{fig4a / fig4b / fig4c} + plot_annotation(tag_levels = "A")} & 
+      theme(axis.title.x = element_blank(),
+            axis.title.y = element_text(size = rel(0.9)),
+            plot.tag = element_text(margin = margin(0, 0, 0, 0, 'mm')),
+            plot.tag.position = c(0, 1))
+    
+    ggsave(plot = coef_fig,
+           filename = "output/figures/bootstrap_coefficients_pointrange_panel.pdf",
+           width = 3.25,
+           height = 8,
+           units = "in")
   }
 
 create_case_study_panel <- 
@@ -903,7 +992,7 @@ create_case_study_panel <-
                         color = 'Uncorrected')) + 
           scale_color_manual(name = NULL, 
                              values = c(Corrected = 'black',
-                                        Uncorrected = 'blue')) +
+                                        Uncorrected = pale_pal[[1]])) +
           scale_linetype_manual(name = NULL, 
                                 values = c(Corrected = 'solid',
                                            Uncorrected = 'dashed')) +
@@ -966,10 +1055,10 @@ create_case_study_panel <-
                     color = 'black',
                     linetype = 'dotted') +
           geom_line(aes(y = raw_compensated_level_cm), 
-                    color = 'blue',
+                    color = pale_pal[[1]],
                     linetype = 'dashed') +
           geom_line(aes(y = raw_white_cm),
-                    color = 'blue',
+                    color = pale_pal[[1]],
                     linetype = 'dotted') +
           geom_segment(data = panel_data[, last(.SD), by = sample_date],
                        aes(y = raw_compensated_level_cm,
@@ -978,7 +1067,7 @@ create_case_study_panel <-
                            xend = sample_time + 3600),
                        linetype = 'longdash',
                        arrow = arrow(angle = 90, ends = 'both', length = unit(0.25, "lines")),
-                       color = xaringanthemer::lighten_color('blue', strength = 0.6)) +
+                       color = xaringanthemer::lighten_color(pale_pal[[1]], strength = 0.5)) +
           geom_segment(data = panel_data[, last(.SD), by = sample_date],
                        aes(y = corrected_compensated_level_cm,
                            yend = corrected_white_cm,
@@ -1000,7 +1089,7 @@ create_case_study_panel <-
                         label = label),
                     angle = 90,
                     vjust = -0.15,
-                    color = c('blue', 'black'),
+                    color = c(pale_pal[[1]], 'black'),
                     size = 0.8*base_font*5/14,
                     parse = TRUE) +
           facet_wrap(~sample_date,
@@ -1026,7 +1115,8 @@ create_case_study_panel <-
     ggsave(plot = panel,
            filename = out.path,
            width = 7.5,
-           height = 9)
+           height = 9,
+           units = "in")
   }
 
 create_et_to_pet_panel <- 
@@ -1105,7 +1195,7 @@ create_et_to_pet_panel <-
                 size = 0.9 * base_font * 5/14) +
       geom_smooth(method = lm,
                   formula = y ~ x,
-                  color = 'blue',
+                  color = pale_pal[[1]],
                   se = FALSE) +
       labs(x = "Potential Evapotranspiration (cm d<sup>-1</sup>)",
            y = "Evapotranspiration (cm d<sup>-1</sup>)") +
@@ -1120,7 +1210,8 @@ create_et_to_pet_panel <-
     ggsave(plot = out,
            filename = out.path,
            width = 7.5,
-           height = 3.75)
+           height = 3.75,
+           units = "in")
   }
 
 # Case Study Functions ----------------------------------------------------

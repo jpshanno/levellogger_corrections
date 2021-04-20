@@ -36,9 +36,9 @@ options(errors.notation = "plus-minus")
 pale_pal <- 
   c(green = "#7DA050",
     orange = "#D19648",
+    blue = "#5982A0",
     purple = "#966283",
     teal = "#329985",
-    blue = "#5982A0",
     red = "#9B5249")
 
 options(ggplot2.discrete.colour = unname(pale_pal),
