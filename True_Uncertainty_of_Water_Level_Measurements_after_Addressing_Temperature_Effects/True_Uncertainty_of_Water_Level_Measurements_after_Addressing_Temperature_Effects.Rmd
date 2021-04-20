@@ -91,6 +91,7 @@ if (any(nchar(rmarkdown::metadata$keypoints) > 100)) {
 }
 ```
 
+<!--
 # Notes
 
 Change emmeans to one-way ANOVA and Tukey
@@ -98,41 +99,11 @@ Change emmeans to one-way ANOVA and Tukey
 Say if the manufacturers state the source of the errors. What causes the error,
 and why do I need to still compensate for it.
 
-Figure 1 explanation: state more clearly that it is two interacting errors, not
-delta T. State how some models may not be counteracting, but instead will be
-compounding
-
-Figure 3: Add panel C showing what is in Panel 4. Panel A + Panel B = Panel C.
-Panel B shows no pattern and errors within range of instrument error, might be
-good to build up into a relationship for Figure 1
-
-Check McLaughlin & Cuevas papers & 'conclusion' of temp differences
-
-Expand figure 1 caption to describe experimental period, serial numbers, etc
-
-Rename experimental periods "GW-Best Practices" = "stat-dis"
-
-groundwater, best practices stable temperatures (such as groundwater)
-groundwater, unsound practices vs groundwater, temperature-biased practices
-surfacewater, best practices
-surfacewater, unsound practices (temperature-biased)
-
-Introduction is very technical -> add more about monitoring scenarios or another
-way to tie it into people's experience
-
 Make cross-sectional diagram of experiment
-
-Specify that air temperature is likely the stronger gradient in most monitoring
-scenarios
 
 Swap grays for instrument and propagated error in time series figure
 
-When creating backfill equations for external and solinst baro data, the models
-between residuals and air temperature show similar slopes as those found in the
-final bootstrap median models
-
-Potentially show that it is possible to use previous correction data for new
-loggers of the same model
+-->
 
 # Introduction
 
@@ -172,7 +143,7 @@ temperature-induced errors can be as high as 19% in streamflow monitoring
 
 To preempt these errors it is recommended that barometric and water level
 pressure transducers be deployed in similar thermal regimes (i.e. within a dry
-well at the same depth) (**CITATION**). However, this type of deployment is not
+well at the same depth) (@mclaughlin-2011). However, this type of deployment is not
 always possible due to cost or setting. In other cases previous deployments may
 not have recognized the potential magnitude of error, but still represent
 critically necessary data sources. Because errors are temperature dependent we
@@ -213,9 +184,9 @@ correction to a known water depth for each pair of air and water transducers. By
 developing a single multi-variate correction we can avoid the need to determine
 a suitable reference pressure measurement or to utilize a pressure chamber.
 
-```{r drivers-panel, fig.cap="Error is driven by a combination of individual transducer errors, which can result in masking by the stronger trend. Panel A shows water level error as a function of air temperature, illustrating a strong linear trend. Panel B shows very little relationship between raw water level error and water temperature. Panel C is the relationship between error and water temperature after the influence of air temperature has been removed via OLS linear regression. Data taken from a single pair of pressure transducers in this study.", fig.asp=0.33, fig.height = 3}
-loadd(fig_drivers_panel)
-fig_drivers_panel
+```{r drivers-panel, fig.cap="Error is driven by a combination of individual transducer errors, which can result in masking by the stronger trend. Panel A shows water level error as a function of air temperature, illustrating a strong linear trend. Panel B shows a dichotomous relationship between water level error and water temperature. Panel C is the relationship between error and water temperature after the influence of air temperature is removed via OLS linear regression. Data taken from a barometric pressure transducer 1066019 and water pressure transducer 1062452 during the SW~bias-2~ period."}
+
+knitr::include_graphics("../output/figures/sources_of_error_scatter_plot_panel.pdf")
 
 ```
 
@@ -298,26 +269,19 @@ contained an absolute pressure transducer, temperature sensor, and on-board data
 logging. These transducers also provide internal temperature compensation of
 pressure measurements.
 
-<!--
-stat-sim GW~best~
-stat-dis GW~bias~
-var-sim SW~best~
-var-dis SW~bias~
-test-data
--->
-
-```{r experiments}
-experiments <- 
+```{r experiments, results = 'asis'}
+experiments <-
   data.table(Scenario = c("GW~best~", "GW~bias~", "SW~best~", "SW~bias-1~", "SW~bias-2~"),
              `Monitoring Analog` = c("Groundwater", "Groundwater", "Surfacewater", "Surfacewater", "Surfacewater"),
              `Deployment Description` = c("Best Practice", "Temperature-differential Biased", "Best Practice", "Temperature-differential Biased", "Temperature-differential Biased"),
              Temperature = c("Stable", "Stable", "Variable", "Variable", "Variable"),
              `Air/Water Temperature Regime` = c("Similar", "Dissimilar", "Similar", "Dissimilar", "Dissimilar"))
 
-qflextable(experiments) %>% 
-  colformat_md() %>%
+flextable(experiments) %>%
+  # colformat_md() %>%
   set_caption("Description of experimental conditions. Best practice describes air and water pressure transducers deployed under similar thermal regimes.",
-              autonum = run_autonum(seq_id = "tab", bkm = "experiments"))
+              autonum = run_autonum(seq_id = "tab", bkm = "experiments")) %>%
+  fit_to_width(max_width = 8)
 
 ```
 
@@ -330,15 +294,21 @@ knitr::kable(logger_metadata[, .(`Number of Loggers` = .N, `Pressure Resolution 
 ```
 
 Water level transducers were suspended from a brace across a large container
-with the transducers zero points aligned. The transducers were covered with a
-fixed depth of water and a layer of canola oil was added to prevent evaporation
-over the length of the experiment. Water level was measured at the start and end
-of the experimental period to confirm no evaporation. To create the best-
-practice condition of thermally similar air and water environments we placed a
-weighted graduated cylinder in the center of the container. During the two
-periods with synchronous thermal regimes the two barometric transducers were
-suspended in the cylinder below the water surface. The entire apparatus was
-covered loosely with aluminum foil to prevent direct wind effects.  
+with the transducers zero points aligned (\@ref(fig:apparatus)). The transducers
+were covered with a fixed depth of water and a layer of canola oil was added to
+prevent evaporation over the length of the experiment. Water level was measured
+at the start and end of the experimental period to confirm no evaporation. To
+create the best- practice condition of thermally similar air and water
+environments we placed a weighted graduated cylinder in the center of the
+container. During the two periods with synchronous thermal regimes the two
+barometric transducers were suspended in the cylinder below the water surface.
+The entire apparatus was covered loosely with aluminum foil to prevent direct
+wind effects.
+
+```{r apparatus, fig.cap="Diagram showing arrangement of pressure transducers within experimental apparatus. During the study two barometric transducers were deployed in the central tube in best-practice study scenarios. During all study periods 18 water transducers were susspended from two cross braces."}
+knitr::include_graphics("../output/figures/experimental_apparatus.png")
+
+```
 
 Best-practices and temperature-differential bias experiments were each performed
 twice under conditions designed to mimic common measurement targets. For stable
@@ -448,8 +418,8 @@ These are equal tail intervals, and it could be better to use HDI instead
 -->
 
 ```{r bootstrap-timeseries, fig.cap="An example of a single water-barometric transducer model used to correct water level. The dotted line represents the raw water level with errors. Each of the three colored lines represent a single bootstrap model and the solid black line is the median response from all 1000 models. Gray bands show the 95% condifence bands derived from the instrument error (dark gray) and propagated error (light gray). The expanded section shows the same series for a two hour period for clarity."}
-loadd(fig_bootstrap_timeseries)
-fig_bootstrap_timeseries
+
+knitr::include_graphics("../output/figures/bootstrap_correction_timeseries_linegraph_and_ribbon_panel.pdf")
 ```
 
 For each water-air transducer pair, the correct compensation model was used to
@@ -469,7 +439,7 @@ predicted = SW~bias-2~ model on all other data
 -->
 
 To ensure independent evaluation of the multivariate compensation equation, the
-the bootstrapped models from the SW~bias-2~ period were evaluated
+the bootstrapped models derived from the SW~bias-2~ period were evaluated
 using data from the remaining 4 experimental periods. Compensation effectiveness
 was evaluated based on two criteria: number of recorded points which fell
 outside of the range of combined instrument errors ($n_{\epsilon,i}$) and the
@@ -626,11 +596,10 @@ error bounds using a t-test with the $\alpha=0.05$ and $H_A=\hat{\epsilon}_{L} -
 \epsilon_{instrument} < 0$, we found RMSE of WL~corr~ was significanlty less
 than instrument error for all experimental periods.
 
-**MAKE SURE YOU DISCUSS WHY THESE LOGGERS WERE REMOVED**
+```{r coefficients, fig.cap="Mean and 95% confidence interval for model coefficients for the 1000 bootstrap models for the SW~bias-2~ period. Panels A and C show coefficients grouping by barometric transducer and panel B shows models grouping in pairs for each water-barometric transducer pair. Water transducers 2025928 (hollow circle) and 2030899 (hollow inverted triangle) are highlighted to illustrate disagreement with other models for one or more coefficients.", fig.align='right'}
 
-```{r coefficients, fig.cap="Mean and 95% confidence interval for model coefficients for the 1000 bootstrap models for the SW~bias-2~ period. Panels A and C show coefficients grouping by barometric transducer and panel B shows models grouping in pairs for each water-barometric transducer pair. Water transducer 2025928 (hollow) is highlighted to illustrate its disagreement with other models."}
-loadd(fig_coefficients_panel)
-fig_coefficients_panel
+knitr::include_graphics("../output/figures/bootstrap_coefficients_pointrange_panel.pdf")
+
 ```
 
 Prior to compensation 0 to 57% of measured points fell outside of the 95%
@@ -677,7 +646,9 @@ flextable(oor_percent_all_points) %>%
                    colwidths = c(1, 2, 2)) %>% 
     hline_top(border = fp_border(width = 1.5)) %>% 
     fit_to_width(max_width = 8) %>% 
-    align(align = "center", part = 'all')
+    align(align = "center", part = 'all') %>% 
+  set_caption("Percentage of observations of raw and corrected water levels falling outside of instrument accuracy range and propagated error range.",
+              autonum = run_autonum(seq_id = "tab", bkm = "oor"))
 ```
 
 ## Uncertainty Analysis
@@ -722,8 +693,15 @@ unc_table <-
   uncertainty_summary[uncertainty_tests, on = "experiment"][sig_letters, on ="experiment"][, .(`Experimental Period` = experiment, `Mean Propagated Error` = propagated_error_cm, `Mean Instrument Error` = instrument_error_full, `Difference +/- SE` = set_errors(estimate, stderr), ` ` = ifelse(p.value <= 0.05, "\\*", ""), `Significance of Propagated Error Between Groups` = sig_group)]
 
 
-knitr::kable(unc_table,
-             caption = "Mean Propagated and Instrument for all 36 transducer pair models by experimental period. Difference and standard error shows the change in confidence band size when all errors are incorporated and were tested for significance using a paired t-test within each experimental period (denoted by '*'). Difference in propagated errors between experimental periods was tested using a one-way ANOVA.")
+# knitr::kable(unc_table,
+#              caption = "Mean Propagated and Instrument for all 36 transducer pair models by experimental period. Difference and standard error shows the change in confidence band size when all errors are incorporated and were tested for significance using a paired t-test within each experimental period (denoted by '*'). Difference in propagated errors between experimental periods was tested using a one-way ANOVA.")
+
+flextable(unc_table) %>% 
+    # colformat_md() %>% 
+    set_caption("Mean Propagated and Instrument for all 36 transducer pair models by experimental period. Difference and standard error shows the change in confidence band size when all errors are incorporated and were tested for significance using a paired t-test within each experimental period (denoted by '*'). Difference in propagated errors between experimental periods was tested using a one-way ANOVA.",
+                autonum = run_autonum(seq_id = "tab", bkm = "uncertainty")) %>% 
+  flextable::fit_to_width(max_width = 8)
+
 ```
 
 Instrument accuracy at a 95% confidence band for all models was either 
@@ -732,14 +710,14 @@ with one of the three transducer models having greater stated accuracy (Table
 \@ref(tab:loggers)). When measurement errors and temperature effects were 
 propagated to represent full uncertainty, every experimental period showed a
 significant increase in uncertainty bounds. The magnitude of the increase varied
-among experimental treatments from `r unctests[["stat-sim"]]`cm for GW~best~ 
-to `r unctests[["test-dat"]]`cm for SW~bias-2~ (Table \@ref(tab:uncertainty)).
+among experimental treatments from `r unctests[["GW~best~"]]`cm for GW~best~ 
+to `r unctests[["SW~bias-2~"]]`cm for SW~bias-2~ (Table \@ref(tab:uncertainty)).
 Significant differences were observed in propagated errors between experimental
 periods. Experimental period SW~bias-2~ had significantly larger uncertainty than
 SW~bias-1~, which was significantly larger than the remaining three periods.
 
 ```{r new-errors}
-vardis <- predicted[experiment == "var-dis"]
+vardis <- predicted[experiment == "SW~bias-1~"]
 vardis[, propagated_error_cm := rect_water_level_cm - water_depth_cm]
 vardis_errors <- 
   vardis[, .(propagated_error_cm = 2 * qnorm(0.975) * sd(propagated_error_cm),
@@ -845,23 +823,6 @@ knitr::include_graphics("../output/figures/et_to_pet_panel.pdf")
 
 ## Temperature-Induced Bias and Compensation Equations
 
-INCORPORATE:
-_For absolute pressure transducers we likely disregard the temperature differential...
-Previous studies have examined absolute transducer error due to individual
-transducer error [@moore-2016] and due to temperature differences between
-transducers [@mclaughlin-2011; @cuevas-2010]. @liu-2015 lays out the underlying
-physics that could lead to gauge transducer errors when a temperature difference
-exists along the vent tube. There is no analogous physical process for absolute
-transducers, which suggests that errors in absolute transducers are unlikely to 
-arise directly as a result of temperature difference._
-
-DO I MENTION HOW THIS HAS AN ADVANTAGE OVER USING EXTERNAL BAROMETRIC PRESSURE?
-Barometric compensation equations are similar to those derived from multi-year
-deployment using external barometric data. More data points = cancel out bias
-between the external data and the transducers. It may be difficult to ensure that 
-all bias is removed doing compensation with external data without a sufficiently
-longer period of record.
-
 Our results show that it is possible to correct water-depth derived from two
 pressure transducers without the need to reference to an external data source.
 Any transducer compensation approach must be a trade-off between convenience,
@@ -875,7 +836,7 @@ each involved instrument and all necessary compensation models. Therefore by
 removing any dependency on external instrumentation we minimize the total 
 uncertainty of the corrected water level measurement. 
 
-Importantly, the presented approach faithfully captures the need for individual
+Importantly, the presented approach faithfully captures the individual
 transducer corrections. One possibility of the two-transducer model is that the
 model would be fit to some artifact of the interaction between the transducers,
 rather than each transducer being represented in the air and water temperature
@@ -1018,7 +979,7 @@ transducer 2013939 showed no overlap in the RMSE range of all other models.
 While this suggests that the transducer may be overfit to the training data, it
 appears that during the SW~best~ period the direction of the relationship
 between water temperature and error reversed relative to all other experimental
-periods. The same occurred for transducers 2064734 and 1062528. At this time it
+periods (\@ref(fig:coefficients)B). The same occurred for transducers 2064734 and 1062528. At this time it
 is impossible to tell if this is due to the high temperatures during this
 period, differential internal compensation among transducers, or some other
 error such as a trapped air bubble against the transducer membrane. The
@@ -1041,18 +1002,18 @@ recommended.
 <!-- compensation approaches across multiple transducers. -->
 
 ```{r sigma-plots, eval = FALSE}
-{ggplot(bootstrap_models[experiment == "test-dat"],
+{ggplot(bootstrap_models[experiment == "SW~bias-2~"],
         aes(x = air_temperature_c,
             fill = baro_sn, group = model_id)) +
-        geom_density(alpha = 0.5) + ggtitle("test-dat")} / {ggplot(bootstrap_models[experiment == "var-dis"],
+        geom_density(alpha = 0.5) + ggtitle("SW~bias-2~")} / {ggplot(bootstrap_models[experiment == "SW~bias-1~"],
        aes(x = air_temperature_c,
            fill = baro_sn, group = model_id)) +
-    geom_density(alpha = 0.5) + ggtitle("var-dis")}
+    geom_density(alpha = 0.5) + ggtitle("SW~bias-1~")}
 
-ggplot(bootstrap_models[experiment == "test-dat"],
+ggplot(bootstrap_models[experiment == "SW~bias-2~"],
         aes(x = water_temperature_c, y = ..scaled..,
             fill = baro_sn, group = model_id)) +
-        geom_density(alpha = 0.5) + ggtitle("test-dat") + facet_wrap(~water_sn, scales = "free")
+        geom_density(alpha = 0.5) + ggtitle("SW~bias-2~") + facet_wrap(~water_sn, scales = "free")
 
 ```
 
@@ -1086,7 +1047,15 @@ interest.
 
 ```{r intercept_mods}
 i_mods <- 
-  bootstrap_models[, .(experiment, N = as.numeric(pmax(abs(air_temperature_c), abs(water_temperature_c), abs(delta_at_01c_min)) == 0), sigma)][, .(mean = mean(N), se = sqrt(var(N)/.N), sigma = median(.SD[N > 0, sigma])), keyby = .(experiment)]
+  bootstrap_models[, 
+                   .(experiment, 
+                     N = as.numeric(pmax(abs(air_temperature_c), 
+                                         abs(water_temperature_c), 
+                                         abs(delta_at_01c_min)) == 0), sigma)
+                   ][, .(mean = mean(N),
+                         se = sqrt(var(N)/.N),
+                         sigma = median(.SD[N > 0, sigma])), 
+                     keyby = .(experiment)]
 
 sigmas <- 
   bootstrap_models[, .(experiment, baro_sn, water_sn, sigma, 
@@ -1127,21 +1096,22 @@ will occur for many transducers, though the magnitude of the error may be
 similar to instrument error and may not be apparent. Our results show that even
 if not apparent, this error should be considered because it represents
 systematic bias rather than a random error. Of the 1000 models fit per
-experimental period, `r imods[["stat-sim"]]`% of GW~best~, `r
-imods[["stat-dis"]]`% of GW~bias~, and `r imods[["var-sim"]]`% of SW~best~ final
-models were intercept-only. Under increasingly ideal conditions more models
-showed no significant relationship with air temperature, water temperature, or
-rate of change of air temperature. The error associated with these intercept
-only models still provides important information regarding true water level
-accuracy and they are included in the propagated error estimates. As intercept
-only, these models are likely not devoid of temperature derived errors, and in
-fact show slightly, but significantly higher $\sigma_{mod}$ than other models (
-`r sigma_string`). This small increase in $\sigma_{mod}$ is likely the result of
-unmodeled temperature-driven errors. As temperature artifacts were present under
-all conditions it is not unexpected that we found that true uncertainty was
-greater than instrument error under all conditions. Taken together it is likely
-that even under ideal conditions thermal artifacts will be affecting measurement
-accuracy in a systematic way and compensation is recommended.
+experimental period, `r imods[["GW~best~"]]`% of GW~best~, 
+`r imods[["GW~bias~"]]`% of GW~bias~, and `r imods[["SW~best~"]]`% of SW~best~ 
+final models were intercept-only. Under increasingly ideal conditions more
+models showed no significant relationship with air temperature, water
+temperature, or rate of change of air temperature. The error associated with
+these intercept only models still provides important information regarding true
+water level accuracy and they are included in the propagated error estimates. As
+intercept only, these models are likely not devoid of temperature derived
+errors, and in fact show slightly, but significantly higher $\sigma_{mod}$ than
+other models ( `r sigma_string`). This small increase in $\sigma_{mod}$ is
+likely the result of unmodeled temperature-driven errors. As temperature
+artifacts were present under all conditions it is not unexpected that we found
+that true uncertainty was greater than instrument error under all conditions.
+Taken together it is likely that even under ideal conditions thermal artifacts
+will be affecting measurement accuracy in a systematic way and compensation is
+recommended.
 
 Increases in measurement error can have important implications for research
 quantifying small changes or weak diurnal (or other cyclic) signals.
