@@ -607,7 +607,8 @@ export_correction_models <-
 
 
 create_drivers_panel <- 
-  function(data){
+  function(data,
+           out.path){
     
     dat_1 <- 
       data$testing[experiment == "var-dis" & baro_sn == "1066019" & water_sn == "1062452"]
@@ -624,7 +625,7 @@ create_drivers_panel <-
                   color = "black") +
       labs(title = "Error as a function of\nAir Temperature",
            x = expression(paste("Air Temperature, ", degree, "C")),
-           y = "Raw Error, cm")
+           y = "Error (cm)")
     
     fig1b <- 
       ggplot(dat_1,
@@ -639,7 +640,7 @@ create_drivers_panel <-
                   color = "black") +
       labs(title = "Error as a function of\nWater Temperature",
            x = expression(paste("Water Temperature, ", degree, "C")),
-           y = "Raw Error, cm")
+           y = NULL)
     
     fig1c <- 
       ggplot(dat_1,
@@ -652,25 +653,38 @@ create_drivers_panel <-
                   formula = "y~x",
                   se = FALSE,
                   color = "black") +
-      labs(title = "Residual Error after Air\nTemperature Trend is Removed",
+      labs(title = "Residual Error minus Air\nTemperature Trend",
            x = expression(paste("Water Temperature, ", degree, "C")),
-           y = "Error (cm)")
+           y = NULL)
     
     fig1 <-
-      {fig1a / fig1b / fig1c + plot_annotation(tag_levels = "A")} &
-      theme_minimal(base_size = 12) + 
-      theme(plot.tag.position = c(0, 1),
-            plot.title = element_text(size = 10))
+      fig1a + 
+        fig1b + 
+        fig1c +
+        plot_annotation(tag_levels = "A") &
+        theme_minimal(base_size = 12) +
+        theme(plot.tag.position = c(0, 1),
+              plot.title = element_text(size = rel(0.75)),
+              axis.title = element_text(size = rel(0.8)))
+
+    ggsave(plot = fig1,
+           filename = paste0(out.path, ".tiff"), # "output/figures/sources_of_error_scatter_plot_panel.pdf",
+           type = "cairo",
+           dpi = 96,
+           width = 7.5,
+           height = 2.75,
+           units = 'in')
     
     ggsave(plot = fig1,
-           filename = "output/figures/sources_of_error_scatter_plot_panel.pdf",
-           height = 8,
-           width = 3,
+           filename = paste0(out.path, ".pdf"), # "output/figures/sources_of_error_scatter_plot_panel.pdf",
+           device = cairo_pdf,
+           width = 7.5,
+           height = 2.75,
            units = 'in')
   }
 
 create_bootstrap_timeseries <- 
-  function(fits, models, exp, water.sn, baro.sn){
+  function(fits, models, exp, water.sn, baro.sn, out.path){
     dat2 <- 
       fits[experiment == exp & baro_sn == baro.sn & water_sn == water.sn]
     
@@ -740,7 +754,7 @@ create_bootstrap_timeseries <-
       coord_cartesian(expand = FALSE) +
       labs(y = "Water Level", 
            x = "Sample Time") +
-      theme_minimal(base_size = 14)
+      theme_minimal(base_size = 12)
     
     child <-
       ggplot(mods2[sample == "yes"], 
@@ -767,7 +781,7 @@ create_bootstrap_timeseries <-
                          position = 'right') +
       scale_x_datetime(breaks = c(as.POSIXct("2020-06-10 18:30", tz = "EST5EDT"),
                                   as.POSIXct("2020-06-10 19:30", tz = "EST5EDT")),
-                       date_labels = "%b %m %H:%M",
+                       date_labels = "%b %d %H:%M",
                        position = 'top') +
       theme_minimal(base_size = 12) +
       theme(axis.title = element_blank(),
@@ -776,21 +790,137 @@ create_bootstrap_timeseries <-
                                            color = 'black'))
     
     fig2 <- 
-      main + inset_element(child, left = 0.05, bottom = 0.05, right = 0.65, top = 0.5)
+      main + inset_element(child, left = 0.025, bottom = 0.05, right = 0.65, top = 0.5)
   
     ggsave(plot = fig2,
-           filename = "output/figures/bootstrap_correction_timeseries_linegraph_and_ribbon_panel.pdf",
+           filename = paste0(out.path, ".pdf"),
+           device = cairo_pdf,
+           height = 3.75,
+           width = 8.4,
+           units = 'in')
+    
+    ggsave(plot = fig2,
+           filename = paste0(out.path, ".tiff"),
+           type = "cairo",
+           dpi = 96,
            height = 3.75,
            width = 8.4,
            units = 'in')
     
     }
 
+create_bootstrap_ols_comparison <- 
+  function(raw.data, 
+           models,
+           baro.sn,
+           water.sn,
+           out.path){
+    # Going to have to use combined_data$training and subset a single pair of 
+    # transducers. Then fit an OLS model and grab the coefs. Then get the 
+    # bootstrap coefs and make the panel I want
+    mods <- 
+      models[grepl(baro.sn, model_id) & grepl(water.sn, model_id) & experiment == "test-dat"]
+    
+    dat <- 
+      raw.data[baro_sn == baro.sn & water_sn == water.sn]
+    
+    ols_mod <- 
+      lm(raw_error_cm ~ air_temperature_c + water_temperature_c + delta_at_01c_min,
+         data = dat)
+      
+    btstrp_coefs <- 
+      melt(mods,
+         id.vars = "model_rep",
+         measure.vars = c("intercept", "air_temperature_c",
+                          "water_temperature_c", "delta_at_01c_min"))
+    
+    btstrp_coefs <- 
+      btstrp_coefs[, variable := fcase(variable == "intercept", "Intercept-~beta[0]",
+                               variable == "air_temperature_c", "Air~Temperature~Slope-~beta[A]",
+                               variable == "water_temperature_c", "Water~Temperature~Slope-~beta[W]",
+                               variable == "delta_at_01c_min", "Delta~Air~Temperature~Slope-~beta[Delta~T[A]]")]
+    
+    ols_coefs <- 
+      data.table(variable = c("Intercept-~beta[0]", 
+                              "Air~Temperature~Slope-~beta[A]",
+                              "Water~Temperature~Slope-~beta[W]", 
+                              "Delta~Air~Temperature~Slope-~beta[Delta~T[A]]"),
+                 value = coef(ols_mod))
+    
+    ols_coefs[, val_sd := broom::tidy(ols_mod)$std.error]
+    
+    ols_coef_dens <- 
+      ols_coefs[, .(value = rnorm(10000, value, val_sd)), 
+                by = .(variable)]
+    
+    btstrp_coefs[, variable := factor(variable,
+                                      levels = c("Intercept-~beta[0]",
+                                                 "Air~Temperature~Slope-~beta[A]",
+                                                 "Water~Temperature~Slope-~beta[W]",
+                                                 "Delta~Air~Temperature~Slope-~beta[Delta~T[A]]"),
+                                      ordered = TRUE)]
+    
+    ols_coef_dens[, variable := factor(variable,
+                                      levels = c("Intercept-~beta[0]",
+                                                 "Air~Temperature~Slope-~beta[A]",
+                                                 "Water~Temperature~Slope-~beta[W]",
+                                                 "Delta~Air~Temperature~Slope-~beta[Delta~T[A]]"),
+                                      ordered = TRUE)]
+    
+    boot_ols_panel <-
+      ggplot(btstrp_coefs) +
+      aes(x = value,
+          y = ..scaled..) +
+      geom_density(trim = TRUE,
+                   alpha = 0.5,
+                   aes(color = "Bootstrap",
+                       fill = "Bootstrap")) +
+      geom_density(data = ols_coef_dens,
+                   aes(color = "OLS Confidence Distribution",
+                       fill = "OLS Confidence Distribution"),
+                   alpha = 0.5,
+                   trim = TRUE) +
+      scale_fill_manual(name = NULL,
+                        values = c("Bootstrap" = pale_pal[[1]],
+                                   "OLS Confidence Distribution" = "gray70")) + 
+      scale_color_manual(name = NULL,
+                         values = c("Bootstrap" = pale_pal[[1]],
+                                    "OLS Confidence Distribution" = "gray70")) + 
+      facet_wrap( ~ variable,
+                  scales = "free",
+                  labeller = label_parsed) + 
+      ylab("Density (scaled to 1)") +
+      xlab(NULL) +
+    theme_minimal(base_size = 18) + 
+      theme(legend.position = "bottom",
+            legend.key.size = unit(0.75, "lines"))
+    
+    
+    
+    ggsave(plot = boot_ols_panel,
+           filename = paste0(out.path, ".pdf"),
+           device = cairo_pdf,
+           height = 7.65,
+           width = 8,
+           units = 'in')
+    
+    ggsave(filename = paste0(out.path, ".tiff"),
+           plot = boot_ols_panel,
+           type = "cairo",
+           width = 8,
+           height = 7.65,
+           dpi = 96,
+           units = "in",
+           compression = "lzw")
+    
+  }
+
 create_coefficients_panel <- 
-  function(models){
+  function(models,
+           out.path){
     
     font_size <- 
-      13
+      12
     
     dat4 <- 
       models[experiment == "test-dat"]
@@ -801,7 +931,7 @@ create_coefficients_panel <-
                                        "no")]
     dat4[, outlier_sn := ifelse(water_sn %in% c("2025928", "2030899"),
                                  water_sn,
-                                 "no")]  
+                                 "Other Transducers")]  
     
     dat4a <- 
       dat4[, 
@@ -824,91 +954,144 @@ create_coefficients_panel <-
              ymax = quantile(delta_at_01c_min, 0.975)), 
            by = .(water_sn, baro_sn, outlier_status, outlier_sn)]
     
+    dat4d <- 
+      dat4[,
+           .SD[1],
+           by = .(outlier_sn)]
+    
+    dat4d[, outlier_sn := factor(outlier_sn, 
+                                 levels = c("Other Transducers",
+                                            "2025928",
+                                            "2030899"), 
+                                 ordered = TRUE)]
+    
     fig4a <- 
       ggplot(dat4a,
              aes(y = y, ymin = ymin, ymax = ymax,
                  x = baro_sn,
                  group = water_sn,
-                 color = outlier_status,
+                 color = outlier_sn,
                  shape = outlier_sn)) +
       geom_pointrange(position = position_dodge(width = 0.9),
                       show.legend = FALSE,
                       fill = "white",
                       size = 0.25) +
-      annotate("text",
-               x = "1065861",
-               y = -0.17,
-               label = "Transducer 2025928",
-               hjust = 0,
-               # fill = "#ffffff80",
-               # label.colour = NA
-               ) +
-      labs(title = expression(hat(beta)[Air~Temperature]),
-           y = "Estimate",
+      labs(y = expression(hat(beta)[~Air~Temperature]), 
            x = "Barometric Transducer Serial Number") +
-      scale_shape_manual(values = c('no' = 19, "2025928" = 21, "2030899" = 25)) +
+      scale_shape_manual(values = c('Other Transducers' = 19, 
+                                    "2025928" = 21, 
+                                    "2030899" = 25)) +
+      scale_color_manual(values = c('Other Transducers' = pale_pal[[1]], 
+                                    "2025928" = pale_pal[[2]], 
+                                    "2030899" = pale_pal[[2]])) +
       theme_minimal(base_size = font_size) +
       theme(axis.text.x = element_text(vjust = 1))
     
-    
     fig4b <- 
-      ggplot(dat4b,
-             aes(y = y, ymin = ymin, ymax = ymax,
-                 x = water_sn,
-                 group = baro_sn,
-                 color = outlier_status,
-                 shape = outlier_sn)) +
-      geom_pointrange(position = position_dodge(width = 1),
-                      show.legend = FALSE,
-                      fill = "white",
-                      size = 0.25) +
-      annotate("text",
-               x = "2059683",
-               y = -0.26,
-               label = "Transducer\n2030899",
-               hjust = 0,
-               vjust = 0.25,
-               # fill = "#ffffff80",
-               # label.colour = NA
-               ) +
-      labs(title = expression(hat(beta)[Water~Temperature]),
-           y = "Estimate",
-           x = "Water Transducer Serial Number") +
-      scale_shape_manual(values = c('no' = 19, "2025928" = 21, "2030899" = 25)) +
-      theme_minimal(base_size = font_size) +
-      theme(axis.text.x = element_text(angle = 90,
-                                       vjust = 0.5,
-                                       hjust = 1))
-    
-    fig4c <- 
       ggplot(dat4c,
              aes(y = y, ymin = ymin, ymax = ymax,
                  x = baro_sn,
                  group = water_sn,
-                 color = outlier_status,
+                 color = outlier_sn,
                  shape = outlier_sn)) +
       geom_pointrange(position = position_dodge(width = 0.9),
                       show.legend = FALSE,
                       fill = "white",
                       size = 0.25) +
-      labs(title = expression(hat(beta)[Delta~Air~Temperature]),
-           y = "Estimate",
+      labs(y = expression(hat(beta)[~Delta~Air~Temperature]), 
            x = "Barometric Transducer Serial Number") +
-      scale_shape_manual(values = c('no' = 19, "2025928" = 21, "2030899" = 25)) +
+      scale_shape_manual(values = c('Other Transducers' = 19, 
+                                    "2025928" = 21, 
+                                    "2030899" = 25)) +
+      scale_color_manual(values = c('Other Transducers' = pale_pal[[1]], 
+                                    "2025928" = pale_pal[[2]], 
+                                    "2030899" = pale_pal[[2]])) +
       theme_minimal(base_size = font_size) +
       theme(axis.text.x = element_text(vjust = 1))
     
-    coef_fig <- 
-      {{fig4a / fig4b / fig4c} + plot_annotation(tag_levels = "A")} & 
+    fig4c <- 
+      ggplot(dat4b,
+             aes(y = y, ymin = ymin, ymax = ymax,
+                 x = water_sn,
+                 group = baro_sn,
+                 color = outlier_sn,
+                 shape = outlier_sn)) +
+      geom_pointrange(position = position_dodge(width = 0.6),
+                      show.legend = FALSE,
+                      fill = "white",
+                      size = 0.25) +
+      labs(y = expression(hat(beta)[~Water~Temperature]), 
+           x = "Water Transducer Serial Number") +
+      scale_shape_manual(values = c('Other Transducers' = 19, 
+                                    "2025928" = 21, 
+                                    "2030899" = 25)) +
+      scale_color_manual(values = c('Other Transducers' = pale_pal[[1]], 
+                                    "2025928" = pale_pal[[2]], 
+                                    "2030899" = pale_pal[[2]])) +
+      theme_minimal(base_size = font_size) +
+      theme(axis.text.x = element_text(angle = 45,
+                                       vjust = 1,
+                                       hjust = 1))
+    
+    fig4d <-
+      ggplot(data = dat4d) +
+        geom_point(aes(x = model_rep,
+                       y = outlier_sn,
+                       shape = outlier_sn,
+                       color = outlier_sn),
+                   fill = 'white',
+                   size = rel(2),
+                   show.legend = FALSE) +
+        geom_text(aes(x = model_rep,
+                      y = outlier_sn,
+                      label = outlier_sn),
+                  hjust = 0,
+                  nudge_x = 0.1,
+                  color = "grey30",
+                  size = 0.75*font_size * (5/14)) +
+      xlim(c(0.5, 2)) +
+      scale_shape_manual(values = c('Other Transducers' = 19, 
+                                    "2025928" = 21, 
+                                    "2030899" = 25)) +
+      scale_color_manual(values = c('Other Transducers' = pale_pal[[1]], 
+                                    "2025928" = pale_pal[[2]], 
+                                    "2030899" = pale_pal[[2]])) +
+      theme_void()
+      
+    
+    coef_fig <-
+      {{fig4a + fig4b + fig4c + plot_spacer() +
+          plot_layout(design = "AAABBB\nCCCCDD", 
+                      guides = 'collect') + 
+          plot_annotation(tag_levels = "A")} & 
       theme(axis.title.x = element_blank(),
-            axis.title.y = element_text(size = rel(0.9)),
+            axis.title.y = element_text(face = 'plain'),
+            # axis.text.y = element_text(size = rel(0.8)),
             plot.tag = element_text(margin = margin(0, 0, 0, 0, 'mm')),
-            plot.tag.position = c(0, 1))
+            plot.tag.position = c(0, 1))} + 
+      inset_element(fig4d, 
+                    left = -0.4, 
+                    right = 1, 
+                    bottom = 0.2,
+                    top = 0.8, 
+                    ignore_tag = TRUE)
+    
+    if(interactive()){coef_fig}
     
     ggsave(plot = coef_fig,
-           filename = "output/figures/bootstrap_coefficients_pointrange_panel.pdf",
-           width = 3.25,
-           height = 8,
+           filename = paste0(out.path, ".pdf"),
+           device = cairo_pdf,
+           width = 6,
+           height = 4,
+           units = "in")
+    
+    ggsave(plot = coef_fig,
+           filename = paste0(out.path, ".tiff"),
+           type = "cairo",
+           compression = "lzw+p",
+           dpi = 96,
+           width = 6,
+           height = 4,
            units = "in")
   }
 
@@ -916,7 +1099,9 @@ create_case_study_panel <-
   function(data, out.path){
     
     data <- 
-      copy(data[sample_time >= as.POSIXct("2018-05-22 00:00:00")])
+      copy(data[between(sample_time,
+                        as.POSIXct("2018-05-22 00:00:00", tz = "EST5EDT"),
+                        as.POSIXct("2018-10-31 23:45:00", tz = "EST5EDT"))])
     
     panel_data <- 
       data[between(sample_time, 
@@ -974,7 +1159,7 @@ create_case_study_panel <-
                                        error_cm)]
     
     base_font <- 
-      14
+      12
     
     panel <-
       {ggplot(data, aes(x = sample_time)) + 
@@ -1000,7 +1185,7 @@ create_case_study_panel <-
           scale_x_datetime(date_labels = "%b",
                            date_breaks = "1 month",
                            expand = expansion(mult = c(0, 0),
-                                              add = c(0, 0))) +
+                                              add = c(0, 43200))) +
           theme_minimal(base_size = base_font) +
           theme(plot.margin = margin(0, 0, b = 0, 0, unit = 'points'),
                 axis.text.x = element_text(margin = margin(2, 0, 0, 0, unit = 'lines')))} / 
@@ -1113,9 +1298,18 @@ create_case_study_panel <-
             legend.margin = margin(0, 0, 0, 0))
     
     ggsave(plot = panel,
-           filename = out.path,
-           width = 7.5,
-           height = 9,
+           filename = paste0(out.path, ".pdf"),
+           device = cairo_pdf,
+           width = 6,
+           height = 7.2,
+           units = "in")
+    
+    ggsave(plot = panel,
+           filename = paste0(out.path, ".tiff"),
+           type = "cairo",
+           dpi = 96,
+           width = 6,
+           height = 7.2,
            units = "in")
   }
 
@@ -1124,7 +1318,7 @@ create_et_to_pet_panel <-
            out.path){
     
     base_font <- 
-      14
+      12
     
     data <- 
       copy(data)
@@ -1153,7 +1347,7 @@ create_et_to_pet_panel <-
                                          list(r2 = round(raw_summ$r.squared, 2))))),
                  type = factor(c("Corrected", "Raw"),
                                levels = c("Raw", "Corrected"), 
-                               labels = c("Raw", "Corrected"),
+                               labels = c("Derived from Raw Data", "Derived from Corrected Data"),
                                ordered = TRUE),
                  x = c(0.21, 0.45),
                  y = c(0.14, 0.28),
@@ -1172,7 +1366,7 @@ create_et_to_pet_panel <-
       subset(et_cm_d > 0 & str_detect(type, "external", negate = TRUE)) %>% 
       transform(type = factor(type, 
                               levels = c("raw", "corrected"), 
-                              labels = c("Raw", "Corrected"),
+                              labels = c("Derived from Raw Data", "Derived from Corrected Data"),
                               ordered = TRUE)) %>% 
       ggplot() +
       aes(x = pet_cm_d, 
@@ -1204,11 +1398,22 @@ create_et_to_pet_panel <-
       theme_minimal(base_size = base_font) +
       theme(axis.title.x = element_markdown(),
             axis.title.y = element_markdown(),
-            strip.text = element_text(size = 0.9*base_font,
-                                      face = 'bold'))
+            strip.text = element_text(size = rel(1.2),
+                                      margin = margin(0,0,5.5,0, "points"),
+                                      vjust = 1,
+                                      hjust = 0))
+
+    ggsave(plot = out,
+           filename = paste0(out.path,".pdf"),
+           device = cairo_pdf,
+           width = 7.5,
+           height = 3.75,
+           units = "in")
     
     ggsave(plot = out,
-           filename = out.path,
+           filename = paste0(out.path,".tiff"),
+           type = "cairo",
+           dpi = 96,
            width = 7.5,
            height = 3.75,
            units = "in")
