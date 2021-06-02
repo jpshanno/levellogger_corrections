@@ -99,25 +99,35 @@ plan <-
 # Figures -----------------------------------------------------------------
 
     fig_drivers_panel = 
-      create_drivers_panel(combined_data),
+      create_drivers_panel(combined_data,
+                           out.path = "output/figures/sources_of_error_scatter_plot_panel"),
     
+    fig_ols_boostrap_comparison = 
+      create_bootstrap_ols_comparison(raw.data = combined_data$training, 
+                                      models = bootstrap_models,
+                                      baro.sn = "1066019",
+                                      water.sn = "2069158",
+                                      out.path = "output/figures/density_plot_bootstrap_and_ols_coefficients"),
+
     fig_bootstrap_timeseries = 
-      create_bootstrap_timeseries(fitted,
-                                  bootstrap_models,
+      create_bootstrap_timeseries(fits = fitted,
+                                  models = bootstrap_models,
                                   exp = "var-dis", 
                                   water.sn = "1062452", 
-                                  baro.sn = "1066019"),
+                                  baro.sn = "1066019",
+                                  out.path = "output/figures/bootstrap_correction_timeseries_linegraph_and_ribbon_panel"),
     
     fig_coefficients_panel = 
-      create_coefficients_panel(bootstrap_models),
+      create_coefficients_panel(bootstrap_models,
+                                out.path = "output/figures/bootstrap_coefficients_pointrange_panel"),
 
     case_study_panel = 
       create_case_study_panel(case_study, 
-                              file_out("output/figures/case_study_panel.pdf")),
+                              out.path = "output/figures/case_study_panel"),
 
     et_to_pet_panel =
       create_et_to_pet_panel(daily_water_balance,
-                             file_out("output/figures/et_to_pet_panel.pdf"))
+                             out.path = "output/figures/et_to_pet_panel")
 
 # Tables ------------------------------------------------------------------
 

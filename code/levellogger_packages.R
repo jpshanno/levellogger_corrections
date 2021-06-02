@@ -34,9 +34,9 @@ options(future.supportsMulticore.unstable = TRUE,
 options(errors.notation = "plus-minus")
 
 pale_pal <- 
-  c(green = "#7DA050",
+  c(blue = "#5982A0",
     orange = "#D19648",
-    blue = "#5982A0",
+    green = "#7DA050",
     purple = "#966283",
     teal = "#329985",
     red = "#9B5249")
