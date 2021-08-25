@@ -608,7 +608,8 @@ export_correction_models <-
 
 create_drivers_panel <- 
   function(data,
-           out.path){
+           out.path,
+           tiff_dpi){
     
     dat_1 <- 
       data$testing[experiment == "var-dis" & baro_sn == "1066019" & water_sn == "1062452"]
@@ -653,7 +654,7 @@ create_drivers_panel <-
                   formula = "y~x",
                   se = FALSE,
                   color = "black") +
-      labs(title = "Residual Error minus Air\nTemperature Trend",
+      labs(title = "Residual Error after Air\nTemperature Correction",
            x = expression(paste("Water Temperature, ", degree, "C")),
            y = NULL)
     
@@ -670,7 +671,7 @@ create_drivers_panel <-
     ggsave(plot = fig1,
            filename = paste0(out.path, ".tiff"), # "output/figures/sources_of_error_scatter_plot_panel.pdf",
            type = "cairo",
-           dpi = 96,
+           dpi = tiff_dpi,
            width = 7.5,
            height = 2.75,
            units = 'in')
@@ -684,7 +685,7 @@ create_drivers_panel <-
   }
 
 create_bootstrap_timeseries <- 
-  function(fits, models, exp, water.sn, baro.sn, out.path){
+  function(fits, models, exp, water.sn, baro.sn, out.path, tiff_dpi){
     dat2 <- 
       fits[experiment == exp & baro_sn == baro.sn & water_sn == water.sn]
     
@@ -802,7 +803,7 @@ create_bootstrap_timeseries <-
     ggsave(plot = fig2,
            filename = paste0(out.path, ".tiff"),
            type = "cairo",
-           dpi = 96,
+           dpi = tiff_dpi,
            height = 3.75,
            width = 8.4,
            units = 'in')
@@ -814,7 +815,8 @@ create_bootstrap_ols_comparison <-
            models,
            baro.sn,
            water.sn,
-           out.path){
+           out.path,
+           tiff_dpi){
     # Going to have to use combined_data$training and subset a single pair of 
     # transducers. Then fit an OLS model and grab the coefs. Then get the 
     # bootstrap coefs and make the panel I want
@@ -909,7 +911,7 @@ create_bootstrap_ols_comparison <-
            type = "cairo",
            width = 8,
            height = 7.65,
-           dpi = 96,
+           dpi = tiff_dpi,
            units = "in",
            compression = "lzw")
     
@@ -917,7 +919,8 @@ create_bootstrap_ols_comparison <-
 
 create_coefficients_panel <- 
   function(models,
-           out.path){
+           out.path,
+           tiff_dpi){
     
     font_size <- 
       12
@@ -1089,14 +1092,14 @@ create_coefficients_panel <-
            filename = paste0(out.path, ".tiff"),
            type = "cairo",
            compression = "lzw+p",
-           dpi = 96,
+           dpi = tiff_dpi,
            width = 6,
            height = 4,
            units = "in")
   }
 
 create_case_study_panel <- 
-  function(data, out.path){
+  function(data, out.path, tiff_dpi){
     
     data <- 
       copy(data[between(sample_time,
@@ -1307,7 +1310,7 @@ create_case_study_panel <-
     ggsave(plot = panel,
            filename = paste0(out.path, ".tiff"),
            type = "cairo",
-           dpi = 96,
+           dpi = tiff_dpi,
            width = 6,
            height = 7.2,
            units = "in")
@@ -1315,7 +1318,8 @@ create_case_study_panel <-
 
 create_et_to_pet_panel <- 
   function(data,
-           out.path){
+           out.path,
+           tiff_dpi){
     
     base_font <- 
       12
@@ -1413,7 +1417,7 @@ create_et_to_pet_panel <-
     ggsave(plot = out,
            filename = paste0(out.path,".tiff"),
            type = "cairo",
-           dpi = 96,
+           dpi = tiff_dpi,
            width = 7.5,
            height = 3.75,
            units = "in")
@@ -1922,11 +1926,29 @@ build_esy_functions <-
                  
                },
              by = .(type)]
+
+    # esy_plot <- 
+    #   ggplot(drawdown %>% transform(`Water Level Type:` = ifelse(type == "raw", "Raw", "Temperature Corrected"))) +
+    #   aes(x = ytd_water_balance, y = compensated_level_cm, color = `Water Level Type:`) +
+    #   geom_point() +
+    #   geom_line(aes(y = drawdown_emp)) + 
+    #   labs(x = "Water Availability Index (Rain + Melt - PET)",
+    #        y = "Water Level Relative to Ground Surface (cm)") +
+    #   theme_minimal(base_size = 14) +
+    #   theme(legend.position = "top")
+    # 
+    # ggsave(filename = "output/figures/supplemental_1.tiff", 
+    #        plot = esy_plot,
+    #        type = "cairo",
+    #        dpi = 96,
+    #        width = 10,
+    #        height = 6,
+    #        units = "in" )
     
-    # ggplot(drawdown) + 
-    #   aes(x = ytd_water_balance, y = compensated_level_cm) + 
-    #   geom_point() + 
-    #   geom_line(aes(y = drawdown_emp), 
+    # ggplot(drawdown) +
+    #   aes(x = ytd_water_balance, y = compensated_level_cm) +
+    #   geom_point() +
+    #   geom_line(aes(y = drawdown_emp),
     #             color = 'red') +
     #   facet_wrap(~type)
     
