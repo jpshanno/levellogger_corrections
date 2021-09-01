@@ -186,7 +186,7 @@ a suitable reference pressure measurement or to utilize a pressure chamber.
 
 ```{r drivers-panel, fig.cap="Error is driven by a combination of individual transducer errors, which can result in masking by the stronger trend. Panel A shows water level error as a function of air temperature, illustrating a strong linear trend. Panel B shows a dichotomous relationship between water level error and water temperature. Panel C is the relationship between error and water temperature after the influence of air temperature is removed via OLS linear regression. Data taken from a barometric pressure transducer 1066019 and water pressure transducer 1062452 during the SW~bias-2~ period."}
 
-knitr::include_graphics("../output/figures/sources_of_error_scatter_plot_panel.pdf")
+knitr::include_graphics("../output/figures/sources_of_error_scatter_plot_panel.tiff")
 
 ```
 
@@ -419,7 +419,7 @@ These are equal tail intervals, and it could be better to use HDI instead
 
 ```{r bootstrap-timeseries, fig.cap="An example of a single water-barometric transducer model used to correct water level. The dotted line represents the raw water level with errors. Each of the three colored lines represent a single bootstrap model and the solid black line is the median response from all 1000 models. Gray bands show the 95% condifence bands derived from the instrument error (dark gray) and propagated error (light gray). The expanded section shows the same series for a two hour period for clarity."}
 
-knitr::include_graphics("../output/figures/bootstrap_correction_timeseries_linegraph_and_ribbon_panel.pdf")
+knitr::include_graphics("../output/figures/bootstrap_correction_timeseries_linegraph_and_ribbon_panel.tiff")
 ```
 
 For each water-air transducer pair, the correct compensation model was used to
@@ -596,9 +596,9 @@ error bounds using a t-test with the $\alpha=0.05$ and $H_A=\hat{\epsilon}_{L} -
 \epsilon_{instrument} < 0$, we found RMSE of WL~corr~ was significanlty less
 than instrument error for all experimental periods.
 
-```{r coefficients, fig.cap="Mean and 95% confidence interval for model coefficients for the 1000 bootstrap models for the SW~bias-2~ period. Panels A and C show coefficients grouping by barometric transducer and panel B shows models grouping in pairs for each water-barometric transducer pair. Water transducers 2025928 (hollow circle) and 2030899 (hollow inverted triangle) are highlighted to illustrate disagreement with other models for one or more coefficients.", fig.align='right'}
+```{r coefficients, fig.cap="Mean and 95% confidence interval for model coefficients for the 1000 bootstrap models for the SW~bias-2~ period. Panels A and C show coefficients grouping by barometric transducer and panel B shows models grouping in pairs for each water-barometric transducer pair. Water transducers 2025928 (hollow circle) and 2030899 (hollow inverted triangle) are highlighted to illustrate disagreement with other models for one or more coefficients.", fig.width=6, fig.height=4}
 
-knitr::include_graphics("../output/figures/bootstrap_coefficients_pointrange_panel.pdf")
+knitr::include_graphics("../output/figures/bootstrap_coefficients_pointrange_panel.tiff")
 
 ```
 
@@ -724,6 +724,9 @@ vardis_errors <-
              instrument_error_cm = 2 * qnorm(0.975) * mean(instrument_error_cm)), 
          by = .(water_sn, baro_sn)]
 
+# write.csv(vardis_errors, row.names = FALSE, "output/writing/Table_S2_transducer_pair_mean_propagated_errors.csv")
+
+
 vardis_tests <- 
   vardis_errors[, t.test(propagated_error_cm, instrument_error_cm, paired = TRUE)[c("estimate", "stderr", "p.value")], by = .(baro_sn)]
 
@@ -790,7 +793,7 @@ cm underestimate and `r max_daily_error` cm overestimate of mean daily water
 level.  
 
 ```{r case-study-panel, fig.width=7.5, fig.cap='A comparison of corrected and uncorrected wetland water levels. Panel A shows the entire growing season at 15-minute interval. Panel B shows the error in daily mean water level. Panel B dashed lines represent manufacturer instrument error and darker columns indicate errors greater than combined instrument error. The vertical shaded bar in Panels A and B highlight the two days shown in Panel C. Panel C shows details of two diurnal water level cycles and the decomposed components of the @white-1932 method.'}
-knitr::include_graphics("../output/figures/case_study_panel.pdf")
+knitr::include_graphics("../output/figures/case_study_panel.tiff")
 ```
 
 Error at the sub-daily range were also found when comparing WL~raw~ and
@@ -806,15 +809,15 @@ compare estimated inflow to actual inflow, we can compare estimated ET to PET.
 For the following results only dry days were used to avoid the complicating factors
 of interception, suppressed ET, and variable water level increase We defined dry 
 days as no daily rainfall or snowmelt greater than 1 mm in a two day period. 
-ET~raw~ showed negligible correlation with PET (`r pet_cor["raw_et_cm"]`), while 
-ET~corr~ showed moderate correlation with PET (`r pet_cor["corrected_et_cm"]`). 
+ET~raw~ showed negligible correlation with PET (`r pet_cor["raw_et_cm_d"]`), while 
+ET~corr~ showed moderate correlation with PET (`r pet_cor["corrected_et_cm_d"]`). 
 Fitting an OLS linear regression between estimated ET and PET showed no 
 significant slope between ET~raw~ and PET, but a significant slope, close to 1 
 for ET~corr~ and PET (Figure \@ref(fig:et-to-pet-panel)).
 
 ```{r et-to-pet-panel, fig.cap = "Linear regession fit between potential evapotranpiration and White method estimates of evapotranspiration. The estimates from the raw data showed a significant intercept but not a significant slope. The estimates from the corrected data showed a significant intercept and slope. The dashed line shows a 1:1 relationship to represent perfect estimation of PET."}
 
-knitr::include_graphics("../output/figures/et_to_pet_panel.pdf")
+knitr::include_graphics("../output/figures/et_to_pet_panel.tiff")
 
 ```
 
