@@ -1423,6 +1423,175 @@ create_et_to_pet_panel <-
            units = "in")
   }
 
+
+
+# Supplemental Material ---------------------------------------------------
+
+create_figure_s1 <- function(file_name) {
+  
+  loadd(final_models)
+  
+  data <- 
+    load_case_study(data = file_in("data/case_study/example_data.csv")) %>% 
+    correct_data(models = final_models) %>% 
+    compensate_data(calibration.data = file_in("data/case_study/calibration_data.csv")) %>%
+    smooth_data(n = 13, "raw_compensated_level_cm", "corrected_compensated_level_cm") %>%
+    subset_year(year = 2018) %>%
+    add_met_data(file_in("data/case_study/water_budget.fst"))
+  
+  drawdown <- 
+    melt(data,
+         measure.vars = patterns("compensated_level_cm"), 
+         id.vars = c("sample_date", "ytd_water_balance"),
+         variable.name = 'type',
+         value.name = 'compensated_level_cm'
+    )
+  
+  drawdown[, .SD[1:which.min(compensated_level_cm)],
+           by = .(type)]
+  
+  drawdown[, type := str_extract(type, "^[a-z]+")]
+  
+  drawdown[, 
+           c("drawdown_emp", "esy_emp",
+             "esy_x_intercept") := {
+               
+               mod <- 
+                 nlrob(compensated_level_cm ~ b0 + b1*ytd_water_balance + b2*ytd_water_balance^2,
+                       data = .SD, 
+                       na.action = na.exclude,
+                       maxit = 50,
+                       algorithm = 'port',
+                       start = list(b0 = 8, b1 = 1, b2 = -1),
+                       lower = list(b0 = -Inf, b1 = 0, b2 = -Inf),
+                       upper = list(b0 = Inf, b1 = Inf, b2 = 0))
+               
+               list(drawdown_emp = predict(mod, newdata = .SD),
+                    esy_emp = quad_prime(mod = mod, wa = .SD[, ytd_water_balance]))
+               
+             },
+           by = .(type)]
+  
+  esy_plot <-
+    ggplot(drawdown %>% transform(`Water Level Type:` = ifelse(type == "raw", "Raw", "Temperature Corrected"))) +
+    aes(x = ytd_water_balance, y = compensated_level_cm, color = `Water Level Type:`) +
+    geom_point() +
+    geom_line(aes(y = drawdown_emp)) +
+    labs(x = "Water Availability Index (Rain + Melt - PET)",
+         y = "Water Level Relative to Ground Surface (cm)") +
+    theme_minimal(base_size = 14) +
+    theme(legend.position = "top")
+  
+  ggsave(filename = file_name,
+         plot = esy_plot,
+         type = "cairo",
+         compression = "lzw",
+         dpi = 600,
+         width = 10,
+         height = 6,
+         units = "in")
+
+}
+
+create_figure_s2 <- function(file_name) {
+  
+  loadd(combined_data)
+  
+  all_data <- rbindlist(combined_data)
+  
+  all_data[, experiment := str_replace(experiment, "~$", "</sub>")]
+  all_data[, experiment := str_replace(experiment, "~b", "<sub>b")]
+  all_data[, logger_pair := paste(baro_sn, water_sn, sep = "_")]
+  all_data[, experiment_time := as.numeric(sample_time - min(sample_time))/60, by = .(experiment, baro_sn, water_sn)]
+  
+  {ggplot(all_data[, first(.SD), by = .(baro_sn, experiment, experiment_time)]) +
+      aes(y = air_temperature_c, group = baro_sn) +
+      labs(y = "Air Temperature (C)")
+  } / {
+    ggplot(all_data[, first(.SD), by = .(water_sn, experiment_time, experiment)]) +
+      aes(y = water_temperature_c, group = water_sn) +
+      labs(y = "Water Temperature (C)")
+  } / {
+    ggplot(all_data[, first(.SD), by = .(baro_sn, experiment, experiment_time)]) +
+      aes(y = delta_at_01c_min, group = baro_sn) +
+      labs(y = "Δ Air Temperature\n(0.1 C/min)")
+  } &
+    aes(x = experiment_time) &
+    geom_line(color = 'gray30', size = rel(0.2)) &
+    labs(x = "Experimental Time (minutes)") &
+    facet_wrap(~experiment, nrow = 1) &
+    theme_minimal(base_size = 11) +
+    theme(strip.text = ggtext::element_markdown(),
+          plot.title = element_text(size = rel(0.75)),
+          axis.title = element_text(size = rel(0.8)))
+  
+  ggsave(filename = file_name,
+         type = "cairo",
+         dpi = 600,
+         compression = "lzw",
+         width = 10.5,
+         height = 6,
+         units = "in")
+  
+}
+
+create_figure_s3 <- function(file_name) {
+
+  loadd(final_models)
+  loadd(combined_data)
+  
+  all_data <- rbindlist(combined_data)
+  
+  new_names <- 
+    c("SW<sub>bias-2</sub>", "GW<sub>bias</sub>", "GW<sub>best</sub>", "SW<sub>bias-1</sub>", "SW<sub>best</sub>") %>% 
+    set_names(c("test-dat", "stat-dis", "stat-sim", "var-dis", "var-sim"))
+  
+  all_data[, experiment := str_replace_all(experiment, new_names)]
+  
+  setnames(final_models,
+           c("air_temperature_c", "water_temperature_c", "delta_at_01c_min", "instrument_error_cm"),
+           c("coef_air_temperature_c", "coef_water_temperature_c", "coef_delta_at_01c_min", "coef_instrument_error_cm"))
+  
+  dat <- 
+    final_models[
+      all_data[water_sn %in% c("2030899", "2064734")],
+      on = c("water_sn", "baro_sn")]
+  
+  dat <- 
+    dat[,
+      water_error_cm := raw_error_cm - (intercept + air_temperature_c * coef_air_temperature_c + delta_at_01c_min * coef_delta_at_01c_min)]
+     
+  ggplot(dat) +
+        aes(x = water_temperature_c,
+            y = water_error_cm) +
+        geom_point(aes(shape = "Other Experiments")) +
+        geom_point(data = dat[experiment == "SW<sub>best</sub>"],
+                   aes(shape = "SW<sub>best</sub>"),
+                   fill = "white") +
+        labs(x = "Water Temperature (C)",
+             y = "Error (cm), Corrected for Air Temperature") +
+        facet_wrap(~ water_sn, scales = "free", drop = TRUE) +
+        scale_shape_manual(name = NULL,
+                           values = c("SW<sub>best</sub>" = 21,
+                                      "Other Experiments" = 19)) +
+        theme_minimal(base_size = 11) +
+        theme(strip.text = ggtext::element_markdown(),
+              legend.text = ggtext::element_markdown(),
+              plot.title = element_text(size = rel(0.75)),
+              axis.title = element_text(size = rel(0.8)))
+  
+  ggsave(filename = file_name,
+         type = "cairo",
+         compression = "lzw",
+         dpi = 600,
+         width = 7,
+         height = 3.75,
+         units = "in")
+  
+}
+
+
+
 # Case Study Functions ----------------------------------------------------
 
 load_case_study <- 
@@ -1927,24 +2096,6 @@ build_esy_functions <-
                },
              by = .(type)]
 
-    # esy_plot <- 
-    #   ggplot(drawdown %>% transform(`Water Level Type:` = ifelse(type == "raw", "Raw", "Temperature Corrected"))) +
-    #   aes(x = ytd_water_balance, y = compensated_level_cm, color = `Water Level Type:`) +
-    #   geom_point() +
-    #   geom_line(aes(y = drawdown_emp)) + 
-    #   labs(x = "Water Availability Index (Rain + Melt - PET)",
-    #        y = "Water Level Relative to Ground Surface (cm)") +
-    #   theme_minimal(base_size = 14) +
-    #   theme(legend.position = "top")
-    # 
-    # ggsave(filename = "output/figures/supplemental_1.tiff", 
-    #        plot = esy_plot,
-    #        type = "cairo",
-    #        dpi = 96,
-    #        width = 10,
-    #        height = 6,
-    #        units = "in" )
-    
     # ggplot(drawdown) +
     #   aes(x = ytd_water_balance, y = compensated_level_cm) +
     #   geom_point() +

@@ -133,7 +133,16 @@ plan <-
     et_to_pet_panel =
       create_et_to_pet_panel(daily_water_balance,
                              out.path = "output/figures/Figure_7-Scatterplot_and_Smooth_ET_to_PET_Panel",
-                             tiff_dpi = 600)
+                             tiff_dpi = 600),
+
+    supplemental_figure_s1 = 
+      create_figure_s1(file_name = file_out("output/figures/Supplemental_Figure_S1_Ecosystem_Specific_Yield_Functions_Line_and_Smooth.tiff")),
+
+    supplemental_figure_s2 = 
+      create_figure_s2(file_name = file_out("output/figures/Supplemental_Figure_S2-Error_Drivers_by_Experimental_Period.tiff")),
+    
+    supplemental_figure_s3 = 
+      create_figure_s3(file_name = file_out("output/figures/Supplemental_Figure_S3-Water_Temperature_Error_Reversal.tiff")),
 
 # Tables ------------------------------------------------------------------
 
