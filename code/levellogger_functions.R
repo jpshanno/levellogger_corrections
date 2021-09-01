@@ -1577,6 +1577,7 @@ create_figure_s3 <- function(file_name) {
         theme_minimal(base_size = 11) +
         theme(strip.text = ggtext::element_markdown(),
               legend.text = ggtext::element_markdown(),
+              legend.position = "bottom",
               plot.title = element_text(size = rel(0.75)),
               axis.title = element_text(size = rel(0.8)))
   
