@@ -1514,7 +1514,7 @@ create_figure_s2 <- function(file_name) {
   } / {
     ggplot(all_data[, first(.SD), by = .(baro_sn, experiment, experiment_time)]) +
       aes(y = delta_at_01c_min, group = baro_sn) +
-      labs(y = "Δ Air Temperature\n(0.1 C/min)")
+      labs(y = "Δ Air Temperature\n(0.01 C/min)")
   } &
     aes(x = experiment_time) &
     geom_line(color = 'gray30', size = rel(0.2)) &
