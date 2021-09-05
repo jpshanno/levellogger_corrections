@@ -1498,7 +1498,12 @@ create_figure_s2 <- function(file_name) {
   loadd(combined_data)
   
   all_data <- rbindlist(combined_data)
+ 
+  new_names <- 
+    c("SW~bias-2~", "GW~bias~", "GW~best~", "SW~bias-1~", "SW~best~") %>% 
+    set_names(c("test-dat", "stat-dis", "stat-sim", "var-dis", "var-sim"))
   
+  all_data[, experiment := str_replace_all(experiment, new_names)]
   all_data[, experiment := str_replace(experiment, "~$", "</sub>")]
   all_data[, experiment := str_replace(experiment, "~b", "<sub>b")]
   all_data[, logger_pair := paste(baro_sn, water_sn, sep = "_")]
@@ -1514,7 +1519,7 @@ create_figure_s2 <- function(file_name) {
   } / {
     ggplot(all_data[, first(.SD), by = .(baro_sn, experiment, experiment_time)]) +
       aes(y = delta_at_01c_min, group = baro_sn) +
-      labs(y = "Δ Air Temperature\n(0.1 C/min)")
+      labs(y = "Δ Air Temperature\n(0.01 C/min)")
   } &
     aes(x = experiment_time) &
     geom_line(color = 'gray30', size = rel(0.2)) &
