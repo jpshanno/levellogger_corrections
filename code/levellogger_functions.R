@@ -1498,7 +1498,12 @@ create_figure_s2 <- function(file_name) {
   loadd(combined_data)
   
   all_data <- rbindlist(combined_data)
+ 
+  new_names <- 
+    c("SW~bias-2~", "GW~bias~", "GW~best~", "SW~bias-1~", "SW~best~") %>% 
+    set_names(c("test-dat", "stat-dis", "stat-sim", "var-dis", "var-sim"))
   
+  all_data[, experiment := str_replace_all(experiment, new_names)]
   all_data[, experiment := str_replace(experiment, "~$", "</sub>")]
   all_data[, experiment := str_replace(experiment, "~b", "<sub>b")]
   all_data[, logger_pair := paste(baro_sn, water_sn, sep = "_")]
