@@ -51,7 +51,7 @@ plan <-
 
 
 # Case Study --------------------------------------------------------------
-
+# Case study is site 152
     # Load and compensate case study data
     case_study =
       load_case_study(data = file_in("data/case_study/example_data.csv")) %>% 
