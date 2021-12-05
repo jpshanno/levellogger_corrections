@@ -624,7 +624,7 @@ create_drivers_panel <-
                   formula = "y~x",
                   se = FALSE,
                   color = "black") +
-      labs(title = "Error as a function of\nAir Temperature",
+      labs(title = "Error as a Function of\nAir Temperature",
            x = expression(paste("Air Temperature, ", degree, "C")),
            y = "Error (cm)")
     
@@ -639,7 +639,7 @@ create_drivers_panel <-
                   formula = "y~x",
                   se = FALSE,
                   color = "black") +
-      labs(title = "Error as a function of\nWater Temperature",
+      labs(title = "Error as a Function of\nWater Temperature",
            x = expression(paste("Water Temperature, ", degree, "C")),
            y = NULL)
     
