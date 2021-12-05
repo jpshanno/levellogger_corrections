@@ -1330,14 +1330,14 @@ create_et_to_pet_panel <-
     data[, pet_cm_d := -pet_cm_d]
     
     raw_mod <- 
-      lm(external_raw_et_cm_d ~ pet_cm_d, 
+      lm(raw_et_cm_d ~ pet_cm_d, 
          data = data[(dry_day)]) 
     raw_summ <- 
       summary(raw_mod)
     
     
     corrected_mod <- 
-      lm(external_corrected_et_cm_d ~ pet_cm_d, 
+      lm(corrected_et_cm_d ~ pet_cm_d, 
          data = data[(dry_day)]) 
     corrected_summ <- 
       summary(corrected_mod)
@@ -1361,15 +1361,15 @@ create_et_to_pet_panel <-
     out <- 
       melt(data[(dry_day)],
            id.vars = c("sample_date", "pet_cm_d", "total_input_cm_d"), 
-           measure.vars = patterns("external_"), 
+           measure.vars = patterns("(_et_cm_d|compensated_level)"), 
            variable.name = "type", 
-           value.name = "value") %>%
+           value.name = "value") %>% 
       transform(variable = str_remove(type, "^(external_)?(corrected|raw)_"), 
                 type = str_extract(type, "^(external_)?(corrected|raw)")) %>% 
       dcast(... ~ variable, value.var = "value") %>% 
-      subset(et_cm_d > 0) %>% 
+      subset(et_cm_d > 0 & str_detect(type, "external", negate = TRUE)) %>% 
       transform(type = factor(type, 
-                              levels = c("external_raw", "external_corrected"), 
+                              levels = c("raw", "corrected"), 
                               labels = c("Derived from Raw Data", "Derived from Corrected Data"),
                               ordered = TRUE)) %>% 
       ggplot() +
