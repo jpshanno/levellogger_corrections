@@ -1330,25 +1330,35 @@ create_et_to_pet_panel <-
     data[, pet_cm_d := -pet_cm_d]
     
     raw_mod <- 
-      lm(raw_et_cm_d ~ pet_cm_d, 
+      quantreg::rq(raw_et_cm_d ~ pet_cm_d, 
          data = data[(dry_day)]) 
-    raw_summ <- 
-      summary(raw_mod)
+    raw_r <- 
+      cor(
+        x = data[(dry_day)][["raw_et_cm_d"]],
+        y = predict(raw_mod, newdata = data[(dry_day)]),
+        method = "spearman",
+        use = "pairwise.complete"
+      )
     
     
     corrected_mod <- 
-      lm(corrected_et_cm_d ~ pet_cm_d, 
-         data = data[(dry_day)]) 
-    corrected_summ <- 
-      summary(corrected_mod)
+      quantreg::rq(corrected_et_cm_d ~ pet_cm_d, 
+         data = data[(dry_day)])
+    corrected_r <- 
+      cor(
+        x = data[(dry_day)][["corrected_et_cm_d"]],
+        y = predict(corrected_mod, newdata = data[(dry_day)]),
+        method = "spearman",
+        use = "pairwise.complete"
+      )
     
     labels <- 
       data.frame(lab = c(glue("{`(Intercept)`} + {pet_cm_d}&times;PET<br>R<sup>2</sup> = {r2}", 
                               .envir = c(as.list(round(coef(corrected_mod), 2)), 
-                                         list(r2 = round(corrected_summ$r.squared, 2)))),
+                                         list(r2 = round(corrected_r^2, 2)))),
                          glue("{`(Intercept)`} + {pet_cm_d}&times;PET<br>R<sup>2</sup> = {r2}", 
                               .envir = c(as.list(round(coef(raw_mod), 2)), 
-                                         list(r2 = round(raw_summ$r.squared, 2))))),
+                                         list(r2 = round(raw_r^2, 2))))),
                  type = factor(c("Corrected", "Raw"),
                                levels = c("Raw", "Corrected"), 
                                labels = c("Derived from Raw Data", "Derived from Corrected Data"),
@@ -1391,14 +1401,12 @@ create_et_to_pet_panel <-
                     label = lab11,
                     angle = angle),
                 size = 0.9 * base_font * 5/14) +
-      geom_smooth(method = lm,
+      geom_quantile(quantiles = 0.5,
                   formula = y ~ x,
-                  color = pale_pal[[1]],
-                  se = FALSE) +
+                  color = pale_pal[[1]]) +
       labs(x = "Potential Evapotranspiration (cm d<sup>-1</sup>)",
            y = "Evapotranspiration (cm d<sup>-1</sup>)") +
-      facet_wrap(~type,
-                 scales = 'free') +
+      facet_wrap(~type) +
       theme_minimal(base_size = base_font) +
       theme(axis.title.x = element_markdown(),
             axis.title.y = element_markdown(),
