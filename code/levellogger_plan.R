@@ -58,8 +58,10 @@ plan <-
       correct_data(models = final_models) %>% 
       compensate_data(calibration.data = file_in("data/case_study/calibration_data.csv")) %>%
       smooth_data(n = 13, "raw_compensated_level_cm", "corrected_compensated_level_cm") %>%
-      subset_year(year = 2018) %>%
+      subset_year(year = c(2012, 2018)) %>%
       add_met_data(file_in("data/case_study/water_budget.fst")) %>% 
+      # calculate_sy() now handles doing the final subset of data, using 2012
+      # for Esy and returning Esy for the case study
       calculate_sy(),
 
     # Calculate water balance components

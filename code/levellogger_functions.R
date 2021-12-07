@@ -1689,7 +1689,7 @@ add_met_data <-
       read_fst(met.path, as.data.table = TRUE)
     
     met <-
-      met[site == "152" & water_year == 2018]
+      met[site == "152" & water_year %in% c(2012, 2018)]
     
     met[, ytd_water_balance := cumsum(rain_cm + pet_cm + melt_cm)]
     met[, ytd_water_balance := ytd_water_balance - max(ytd_water_balance, na.rm = TRUE)]
@@ -1717,19 +1717,19 @@ calculate_sy <-
                exp(0.00983144846311064 * wl))
     
     esy_functions <- 
-      build_esy_functions(data)
+      build_esy_functions(data[year(sample_time) == 2012])
     
     data[, `:=`(external_raw_sy = 1 / external_esy_function(raw_compensated_level_cm),
                 external_corrected_sy = 1 / external_esy_function(corrected_compensated_level_cm),
                 corrected_sy = 1/esy_functions['corrected', pred_fun[[1]]](corrected_compensated_level_cm),
                 raw_sy = 1/esy_functions['raw', pred_fun[[1]]](raw_compensated_level_cm))]
    
-    data
+    data[year(sample_time) == 2018]
   }
 
 subset_year <- 
   function(data, year){
-    data[year(sample_time) == year]
+    data[year(sample_time) %in% year]
   }
 
 subset_case_study <- 
