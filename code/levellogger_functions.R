@@ -1494,7 +1494,7 @@ create_figure_s1 <- function(file_name) {
          plot = esy_plot,
          type = "cairo",
          compression = "lzw",
-         dpi = 600,
+         dpi = 900,
          width = 10,
          height = 6,
          units = "in")
@@ -1540,7 +1540,7 @@ create_figure_s2 <- function(file_name) {
   
   ggsave(filename = file_name,
          type = "cairo",
-         dpi = 600,
+         dpi = 900,
          compression = "lzw",
          width = 10.5,
          height = 6,
@@ -1597,7 +1597,7 @@ create_figure_s3 <- function(file_name) {
   ggsave(filename = file_name,
          type = "cairo",
          compression = "lzw",
-         dpi = 600,
+         dpi = 900,
          width = 7,
          height = 3.75,
          units = "in")
